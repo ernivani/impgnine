@@ -1,7 +1,8 @@
-#include "engine.hpp"
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
-#include <cstdlib>
+
+#include "engine.hpp"
 
 namespace impgine {
     int main() {
@@ -9,14 +10,14 @@ namespace impgine {
 
         try {
             engine.run();
-        } catch (const std::exception& e) {
+        } catch (const std::exception & e) {
             std::cerr << e.what() << std::endl;
             return EXIT_FAILURE;
         }
 
         return EXIT_SUCCESS;
     }
-}
+} // namespace impgine
 
 int main() {
     return impgine::main();

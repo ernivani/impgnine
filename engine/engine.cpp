@@ -1,13 +1,16 @@
 #include "engine.hpp"
-#include <cstdlib>
+
 #include <array>
+#include <cstdlib>
 
 namespace impgine {
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
-    const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
-    const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+                                      const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+                                      const VkAllocationCallbacks* pAllocator,
+                                      VkDebugUtilsMessengerEXT* pDebugMessenger) {
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+        instance, "vkCreateDebugUtilsMessengerEXT");
     if (func != nullptr) {
         return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
     } else {
@@ -16,8 +19,9 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
 }
 
 void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger,
-    const VkAllocationCallbacks* pAllocator) {
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+                                   const VkAllocationCallbacks* pAllocator) {
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+        instance, "vkDestroyDebugUtilsMessengerEXT");
     if (func != nullptr) {
         func(instance, debugMessenger, pAllocator);
     }
@@ -30,9 +34,7 @@ Engine::Engine() {
     initVulkan();
 }
 
-Engine::~Engine() {
-    cleanup();
-}
+Engine::~Engine() { cleanup(); }
 
 void Engine::run() {
     std::cout << "Welcome to Impgine!\n";
@@ -45,19 +47,20 @@ void Engine::initVulkan() {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
-    
+
     swapChain = std::make_unique<SwapChain>(device, physicalDevice, surface, *window);
-    
+
     createCommandPool();
     createCommandBuffers();
-    
+
     // Create pipeline layout
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 0;
     pipelineLayoutInfo.pushConstantRangeCount = 0;
 
-    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) !=
+        VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
     }
 
@@ -66,12 +69,9 @@ void Engine::initVulkan() {
     Pipeline::defaultPipelineConfigInfo(pipelineConfig);
     pipelineConfig.renderPass = swapChain->getRenderPass();
     pipelineConfig.pipelineLayout = pipelineLayout;
-    
-    pipeline = std::make_unique<Pipeline>(
-        device,
-        "shaders/vert.spv",
-        "shaders/frag.spv",
-        pipelineConfig);
+
+    pipeline =
+        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
 }
 
 void Engine::mainLoop() {
@@ -86,7 +86,7 @@ void Engine::cleanup() {
     if (pipeline) {
         pipeline.reset();
     }
-    
+
     if (swapChain) {
         swapChain.reset();
     }
@@ -110,7 +110,7 @@ void Engine::cleanup() {
     if (surface != VK_NULL_HANDLE) {
         vkDestroySurfaceKHR(instance, surface, nullptr);
     }
-    
+
     if (instance != VK_NULL_HANDLE) {
         vkDestroyInstance(instance, nullptr);
     }
@@ -185,8 +185,12 @@ bool Engine::checkValidationLayerSupport() {
 void Engine::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
     createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                                 VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     createInfo.pfnUserCallback = debugCallback;
 }
 
@@ -196,14 +200,13 @@ void Engine::setupDebugMessenger() {
     VkDebugUtilsMessengerCreateInfoEXT createInfo;
     populateDebugMessengerCreateInfo(createInfo);
 
-    if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+    if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) !=
+        VK_SUCCESS) {
         throw std::runtime_error("failed to set up debug messenger!");
     }
 }
 
-void Engine::createSurface() {
-    window->createWindowSurface(instance, &surface);
-}
+void Engine::createSurface() { window->createWindowSurface(instance, &surface); }
 
 bool Engine::isDeviceSuitable(VkPhysicalDevice device) {
     QueueFamilyIndices indices = findQueueFamilies(device);
@@ -213,7 +216,8 @@ bool Engine::isDeviceSuitable(VkPhysicalDevice device) {
     bool swapChainAdequate = false;
     if (extensionsSupported) {
         auto swapChainSupport = SwapChain::querySwapChainSupport(device, surface);
-        swapChainAdequate = !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
+        swapChainAdequate =
+            !swapChainSupport.formats.empty() && !swapChainSupport.presentModes.empty();
     }
 
     return indices.isComplete() && extensionsSupported && swapChainAdequate;
@@ -224,7 +228,8 @@ bool Engine::checkDeviceExtensionSupport(VkPhysicalDevice device) {
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 
     std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
+                                         availableExtensions.data());
 
     std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
 
@@ -300,10 +305,8 @@ void Engine::createLogicalDevice() {
     QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-    std::set<uint32_t> uniqueQueueFamilies = {
-        indices.graphicsFamily.value(),
-        indices.presentFamily.value()
-    };
+    std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(),
+                                              indices.presentFamily.value()};
 
     float queuePriority = 1.0f;
     for (uint32_t queueFamily : uniqueQueueFamilies) {
@@ -439,11 +442,13 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 
 void Engine::drawFrame() {
     // Wait for the previous frame to finish
-    VkFence inFlightFence = swapChain->getInFlightFence();
+    VkFence inFlightFence = swapChain->getInFlightFence(currentFrame);
     vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex;
-    auto result = swapChain->acquireNextImage(&imageIndex);
+    // We need to guess which image will be available, so we'll use frame-based semaphore for now
+    VkSemaphore imageAvailableSemaphore = swapChain->getImageAvailableSemaphore(currentFrame % swapChain->imageCount());
+    auto result = swapChain->acquireNextImage(&imageIndex, currentFrame, imageAvailableSemaphore);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         recreateSwapChain();
@@ -463,7 +468,7 @@ void Engine::drawFrame() {
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore waitSemaphores[] = {swapChain->getImageAvailableSemaphore(currentFrame % swapChain->imageCount())};
+    VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
@@ -481,7 +486,7 @@ void Engine::drawFrame() {
     }
 
     // Present frame
-    result = swapChain->presentFrame(presentQueue, &imageIndex);
+    result = swapChain->presentFrame(presentQueue, &imageIndex, currentFrame);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
         framebufferResized = false;
         recreateSwapChain();
@@ -503,22 +508,19 @@ void Engine::recreateSwapChain() {
     vkDeviceWaitIdle(device);
 
     swapChain.reset();
-    
+
     swapChain = std::make_unique<SwapChain>(device, physicalDevice, surface, *window);
-    
+
     // Recreate pipeline since it depends on render pass
     pipeline.reset();
-    
+
     PipelineConfigInfo pipelineConfig{};
     Pipeline::defaultPipelineConfigInfo(pipelineConfig);
     pipelineConfig.renderPass = swapChain->getRenderPass();
     pipelineConfig.pipelineLayout = pipelineLayout;
-    
-    pipeline = std::make_unique<Pipeline>(
-        device,
-        "shaders/vert.spv",
-        "shaders/frag.spv",
-        pipelineConfig);
+
+    pipeline =
+        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
 }
 
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
@@ -528,12 +530,10 @@ void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height
     app->framebufferResized = true;
 }
 
-VKAPI_ATTR VkBool32 VKAPI_CALL Engine::debugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
-
+VKAPI_ATTR VkBool32 VKAPI_CALL
+Engine::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                      VkDebugUtilsMessageTypeFlagsEXT messageType,
+                      const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
     (void)messageSeverity;
     (void)messageType;
     (void)pUserData;
@@ -543,4 +543,4 @@ VKAPI_ATTR VkBool32 VKAPI_CALL Engine::debugCallback(
     return VK_FALSE;
 }
 
-} // namespace impgine
+}  // namespace impgine

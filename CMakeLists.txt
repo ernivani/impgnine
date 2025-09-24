@@ -37,7 +37,6 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
     ${Vulkan_INCLUDE_DIRS}
-    ${CMAKE_CURRENT_SOURCE_DIR}/build/vcpkg_installed/arm64-osx/include
 )
 
 # Compiler-specific options
