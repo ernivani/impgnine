@@ -32,6 +32,12 @@ namespace impgine {
 
         void setUserPointer(void * pointer);
         void setFramebufferSizeCallback(GLFWframebuffersizefun callback);
+        
+        // Input handling
+        bool isKeyPressed(int key) const;
+        void getCursorPos(double* xpos, double* ypos) const;
+        void setCursorPos(double xpos, double ypos) const;
+        void setCursorInputMode(int mode) const;
 
         private: int width;
         int height;

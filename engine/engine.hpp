@@ -65,6 +65,10 @@ namespace impgine {
         void mainLoop();
         void cleanup();
         void cleanupSwapChain();
+        
+        // Input handling
+        void processInput(float deltaTime);
+        void handleMouseMovement();
 
         // Vulkan initialization functions
         void createInstance();
@@ -188,6 +192,12 @@ namespace impgine {
         uint32_t currentFrame = 0;
         bool framebufferResized = false;
         bool needsPortabilitySubset = false;
+        
+        // Input and movement
+        double lastMouseX = WIDTH / 2.0;
+        double lastMouseY = HEIGHT / 2.0;
+        bool firstMouse = true;
+        bool mouseCaptured = true;  // Start with mouse captured
     };
 
     // Helper functions (in global namespace within impgine)

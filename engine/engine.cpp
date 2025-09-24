@@ -9,7 +9,7 @@
 namespace impgine {
 
 const std::string Engine::MODEL_PATH = "models/viking_room.obj";
-const std::string Engine::TEXTURE_PATH = "textures/viking_room.png";
+const std::string Engine::TEXTURE_PATH = "textures/nonexistent.jpg";
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                       const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -53,6 +53,10 @@ void Engine::initVulkan() {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+    
+    // Initialize mouse capture
+    window->setCursorInputMode(GLFW_CURSOR_DISABLED);
+    window->setCursorPos(WIDTH / 2.0, HEIGHT / 2.0);
 
     swapChain = std::make_unique<SwapChain>(device, physicalDevice, surface, *window);
 
@@ -98,8 +102,16 @@ void Engine::initVulkan() {
 }
 
 void Engine::mainLoop() {
+    auto lastTime = std::chrono::high_resolution_clock::now();
+    
     while (!window->shouldClose()) {
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
+        lastTime = currentTime;
+        
         window->pollEvents();
+        processInput(deltaTime);
+        handleMouseMovement();
         drawFrame();
     }
     vkDeviceWaitIdle(device);
@@ -854,13 +866,20 @@ void Engine::createDescriptorSets() {
 void Engine::createTextureImage() {
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-    
-    mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
-    VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
-        throw std::runtime_error("échec du chargement d'une image!");
+        std::cout << "Texture not found in textures folder, trying the base texture.jpg" << std::endl;
+        // callback to the texture.jpg base image 
+        pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+        if (!pixels) {
+            throw std::runtime_error("échec du chargement d'une image!");
+        }
     }
+
+    // Calculate mipLevels and imageSize AFTER we have valid texture dimensions
+    mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
+    VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
@@ -1161,11 +1180,16 @@ void Engine::updateUniformBuffer(uint32_t currentImage) {
     auto currentTime = std::chrono::high_resolution_clock::now();
     float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
+    // Set up projection matrix (only needs to be set once unless aspect ratio changes)
+    camera.setPerspectiveProjection(glm::radians(45.0f), swapChain->getSwapChainExtent().width / (float) swapChain->getSwapChainExtent().height, 0.1f, 100.0f);
+    
+    // Update view matrix based on current camera state
+    camera.updateViewMatrix();
+
     UniformBufferObject ubo{};
-    ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(45.0f), swapChain->getSwapChainExtent().width / (float) swapChain->getSwapChainExtent().height, 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1;
+    ubo.model = glm::rotate(glm::mat4(1.0f), 1 * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = camera.getView();
+    ubo.proj = camera.getProjection();
 
     void* data;
     vkMapMemory(device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
@@ -1366,6 +1390,60 @@ Engine::debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
     return VK_FALSE;
+}
+
+void Engine::processInput(float deltaTime) {
+    const float moveSpeed = 5.0f; // units per second
+    
+    // WASD movement (using ZQSD for AZERTY keyboards, but we'll use WASD)
+    if (window->isKeyPressed(GLFW_KEY_W)) {
+        camera.moveForward(moveSpeed * deltaTime);
+    }
+    if (window->isKeyPressed(GLFW_KEY_S)) {
+        camera.moveBackward(moveSpeed * deltaTime);
+    }
+    if (window->isKeyPressed(GLFW_KEY_A)) {
+        camera.moveLeft(moveSpeed * deltaTime);
+    }
+    if (window->isKeyPressed(GLFW_KEY_D)) {
+        camera.moveRight(moveSpeed * deltaTime);
+    }
+    
+    // Space and Shift for up/down movement
+    if (window->isKeyPressed(GLFW_KEY_SPACE)) {
+        camera.moveUp(moveSpeed * deltaTime);
+    }
+    if (window->isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
+        camera.moveDown(moveSpeed * deltaTime);
+    }
+    
+    // ESC to close application
+    if (window->isKeyPressed(GLFW_KEY_ESCAPE)) {
+        glfwSetWindowShouldClose(window->getGLFWWindow(), GLFW_TRUE);
+    }
+}
+
+void Engine::handleMouseMovement() {
+    if (!mouseCaptured) return;
+    
+    double xpos, ypos;
+    window->getCursorPos(&xpos, &ypos);
+    
+    if (firstMouse) {
+        lastMouseX = xpos;
+        lastMouseY = ypos;
+        firstMouse = false;
+    }
+    
+    double xoffset = xpos - lastMouseX;
+    double yoffset = ypos - lastMouseY; // Normal direction for intuitive mouse look
+    
+    lastMouseX = xpos;
+    lastMouseY = ypos;
+    
+    const float sensitivity = 0.002f; // Adjust as needed
+    camera.rotateYaw(static_cast<float>(xoffset * sensitivity));
+    camera.rotatePitch(static_cast<float>(yoffset * sensitivity));
 }
 
 }  // namespace impgine

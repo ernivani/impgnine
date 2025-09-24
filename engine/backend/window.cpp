@@ -64,4 +64,20 @@ namespace impgine {
         glfwSetFramebufferSizeCallback(window, callback);
     }
 
+    bool Window::isKeyPressed(int key) const {
+        return glfwGetKey(window, key) == GLFW_PRESS;
+    }
+
+    void Window::getCursorPos(double* xpos, double* ypos) const {
+        glfwGetCursorPos(window, xpos, ypos);
+    }
+
+    void Window::setCursorPos(double xpos, double ypos) const {
+        glfwSetCursorPos(window, xpos, ypos);
+    }
+
+    void Window::setCursorInputMode(int mode) const {
+        glfwSetInputMode(window, GLFW_CURSOR, mode);
+    }
+
 } // namespace impgine
