@@ -1,5 +1,5 @@
 {
-  "name": "Impgnine",
+  "name": "impgnine",
   "version": "1.0.0",
   "dependencies": [
     "glfw3",
