@@ -40,6 +40,7 @@ namespace impgine {
 
     // External declaration of vertex data
     extern const std::vector<Vertex> vertices;
+    extern const std::vector<uint16_t> indices;
 
     struct PipelineConfigInfo {
         PipelineConfigInfo() =
@@ -73,7 +74,7 @@ namespace impgine {
         Pipeline(const Pipeline & ) = delete;
         Pipeline & operator = (const Pipeline & ) = delete;
 
-        void bind(VkCommandBuffer commandBuffer, VkBuffer vertexBuffer);
+        void bind(VkCommandBuffer commandBuffer);
 
         static void defaultPipelineConfigInfo(PipelineConfigInfo & configInfo);
         static void enableAlphaBlending(PipelineConfigInfo & configInfo);
