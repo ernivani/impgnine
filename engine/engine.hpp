@@ -64,6 +64,7 @@ namespace impgine {
         private: void initVulkan();
         void mainLoop();
         void cleanup();
+        void cleanupSwapChain();
 
         // Vulkan initialization functions
         void createInstance();
@@ -83,7 +84,10 @@ namespace impgine {
         void createTextureImage();
         void createTextureImageView();
         void createTextureSampler();
+        void createColorResources();
         void createDepthResources();
+        void createRenderPass();
+        void createFramebuffers();
         void createCommandBuffers();
         void loadModel();
         void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
@@ -95,7 +99,7 @@ namespace impgine {
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
         uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
         void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-        void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+        void createImage(uint32_t width, uint32_t height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
         VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, uint32_t mipLevels);
         VkCommandBuffer beginSingleTimeCommands();
         void endSingleTimeCommands(VkCommandBuffer commandBuffer);
@@ -105,6 +109,7 @@ namespace impgine {
         VkFormat findDepthFormat();
         VkFormat findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
         bool hasStencilComponent(VkFormat format);
+        VkSampleCountFlagBits getMaxUsableSampleCount();
         std::vector <
         const char * > getRequiredExtensions();
 
@@ -164,6 +169,10 @@ namespace impgine {
         VkDescriptorPool descriptorPool;
         std::vector<VkDescriptorSet> descriptorSets;
         uint32_t mipLevels;
+        VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+        VkImage colorImage;
+        VkDeviceMemory colorImageMemory;
+        VkImageView colorImageView;
         VkImage textureImage;
         VkDeviceMemory textureImageMemory;
         VkImageView textureImageView;
@@ -171,6 +180,8 @@ namespace impgine {
         VkImage depthImage;
         VkDeviceMemory depthImageMemory;
         VkImageView depthImageView;
+        VkRenderPass renderPass;
+        std::vector<VkFramebuffer> swapChainFramebuffers;
         std::vector < VkCommandBuffer > commandBuffers;
         VkPipelineLayout pipelineLayout;
 
