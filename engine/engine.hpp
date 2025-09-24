@@ -53,12 +53,14 @@ namespace impgine {
         void pickPhysicalDevice();
         void createLogicalDevice();
         void createCommandPool();
+        void createVertexBuffer();
         void createCommandBuffers();
 
         // Helper functions
         bool isDeviceSuitable(VkPhysicalDevice device);
         bool checkDeviceExtensionSupport(VkPhysicalDevice device);
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
+        uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
         std::vector <
         const char * > getRequiredExtensions();
 
@@ -106,6 +108,8 @@ namespace impgine {
         VkQueue graphicsQueue;
         VkQueue presentQueue;
         VkCommandPool commandPool;
+        VkBuffer vertexBuffer;
+        VkDeviceMemory vertexBufferMemory;
         std::vector < VkCommandBuffer > commandBuffers;
         VkPipelineLayout pipelineLayout;
 

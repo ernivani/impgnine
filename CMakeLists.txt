@@ -18,7 +18,8 @@ endif()
 # Find required packages
 find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
-find_package(glm REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GLM REQUIRED glm)
 
 # Create executable
 file(GLOB_RECURSE SOURCES "engine/*.cpp")
@@ -29,7 +30,6 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE
     Vulkan::Vulkan
     glfw
-    glm::glm
 )
 
 # Include directories
@@ -37,6 +37,7 @@ target_include_directories(${PROJECT_NAME}
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
     ${Vulkan_INCLUDE_DIRS}
+    ${GLM_INCLUDE_DIRS}
 )
 
 # Compiler-specific options
