@@ -42,14 +42,17 @@ public:
     VkResult acquireNextImage(uint32_t* imageIndex);
     VkResult presentFrame(VkQueue presentQueue, uint32_t* imageIndex);
     
-    VkSemaphore getImageAvailableSemaphore() const { return imageAvailableSemaphores[currentFrame]; }
-    VkSemaphore getRenderFinishedSemaphore() const { return renderFinishedSemaphores[currentFrame]; }
+    VkSemaphore getImageAvailableSemaphore(uint32_t imageIndex) const { return imageAvailableSemaphores[imageIndex]; }
+    VkSemaphore getRenderFinishedSemaphore(uint32_t imageIndex) const { return renderFinishedSemaphores[imageIndex]; }
     VkFence getInFlightFence() const { return inFlightFences[currentFrame]; }
 
     bool compareSwapFormats(const SwapChain& swapChain) const {
         return swapChain.swapChainDepthFormat == swapChainDepthFormat &&
                swapChain.swapChainImageFormat == swapChainImageFormat;
     }
+
+    void recreateSwapChain();
+    void cleanupSwapChain();
 
     static SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface);
 

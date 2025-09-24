@@ -65,6 +65,7 @@ private:
     // Drawing
     void drawFrame();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    void recreateSwapChain();
 
     // Callback functions
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height);

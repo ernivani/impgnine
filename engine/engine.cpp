@@ -446,11 +446,9 @@ void Engine::drawFrame() {
     auto result = swapChain->acquireNextImage(&imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        // Handle swap chain recreation if needed
+        recreateSwapChain();
         return;
-    }
-
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
@@ -465,7 +463,7 @@ void Engine::drawFrame() {
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-    VkSemaphore waitSemaphores[] = {swapChain->getImageAvailableSemaphore()};
+    VkSemaphore waitSemaphores[] = {swapChain->getImageAvailableSemaphore(currentFrame % swapChain->imageCount())};
     VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
@@ -474,7 +472,7 @@ void Engine::drawFrame() {
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
 
-    VkSemaphore signalSemaphores[] = {swapChain->getRenderFinishedSemaphore()};
+    VkSemaphore signalSemaphores[] = {swapChain->getRenderFinishedSemaphore(imageIndex)};
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
@@ -486,15 +484,41 @@ void Engine::drawFrame() {
     result = swapChain->presentFrame(presentQueue, &imageIndex);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebufferResized) {
         framebufferResized = false;
-        // Handle swap chain recreation if needed
-        return;
-    }
-
-    if (result != VK_SUCCESS) {
+        recreateSwapChain();
+    } else if (result != VK_SUCCESS) {
         throw std::runtime_error("failed to present swap chain image!");
     }
 
     currentFrame = (currentFrame + 1) % SwapChain::MAX_FRAMES_IN_FLIGHT;
+}
+
+void Engine::recreateSwapChain() {
+    int width = 0, height = 0;
+    window->getFramebufferSize(&width, &height);
+    while (width == 0 || height == 0) {
+        window->getFramebufferSize(&width, &height);
+        window->waitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+
+    swapChain.reset();
+    
+    swapChain = std::make_unique<SwapChain>(device, physicalDevice, surface, *window);
+    
+    // Recreate pipeline since it depends on render pass
+    pipeline.reset();
+    
+    PipelineConfigInfo pipelineConfig{};
+    Pipeline::defaultPipelineConfigInfo(pipelineConfig);
+    pipelineConfig.renderPass = swapChain->getRenderPass();
+    pipelineConfig.pipelineLayout = pipelineLayout;
+    
+    pipeline = std::make_unique<Pipeline>(
+        device,
+        "shaders/vert.spv",
+        "shaders/frag.spv",
+        pipelineConfig);
 }
 
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height) {

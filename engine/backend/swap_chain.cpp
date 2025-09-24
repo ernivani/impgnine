@@ -14,32 +14,17 @@ SwapChain::SwapChain(VkDevice device, VkPhysicalDevice physicalDevice, VkSurface
 }
 
 SwapChain::~SwapChain() {
-    for (auto imageView : swapChainImageViews) {
-        vkDestroyImageView(device, imageView, nullptr);
-    }
-    swapChainImageViews.clear();
-
-    if (swapChain != nullptr) {
-        vkDestroySwapchainKHR(device, swapChain, nullptr);
-        swapChain = nullptr;
-    }
-
-    for (size_t i = 0; i < depthImages.size(); i++) {
-        vkDestroyImageView(device, depthImageViews[i], nullptr);
-        vkDestroyImage(device, depthImages[i], nullptr);
-        vkFreeMemory(device, depthImageMemorys[i], nullptr);
-    }
-
-    for (auto framebuffer : swapChainFramebuffers) {
-        vkDestroyFramebuffer(device, framebuffer, nullptr);
-    }
+    cleanupSwapChain();
 
     vkDestroyRenderPass(device, renderPass, nullptr);
 
     // cleanup synchronization objects
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+    for (size_t i = 0; i < imageAvailableSemaphores.size(); i++) {
         vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+        vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+    }
+    
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroyFence(device, inFlightFences[i], nullptr);
     }
 }
@@ -51,15 +36,22 @@ VkResult SwapChain::acquireNextImage(uint32_t* imageIndex) {
         device,
         swapChain,
         std::numeric_limits<uint64_t>::max(),
-        imageAvailableSemaphores[currentFrame],
+        imageAvailableSemaphores[currentFrame % imageCount()],
         VK_NULL_HANDLE,
         imageIndex);
+
+    // Check if this image is already being used by another frame
+    if (imagesInFlight[*imageIndex] != VK_NULL_HANDLE) {
+        vkWaitForFences(device, 1, &imagesInFlight[*imageIndex], VK_TRUE, std::numeric_limits<uint64_t>::max());
+    }
+    // Mark this image as being used by the current frame
+    imagesInFlight[*imageIndex] = inFlightFences[currentFrame];
 
     return result;
 }
 
 VkResult SwapChain::presentFrame(VkQueue presentQueue, uint32_t* imageIndex) {
-    VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[currentFrame]};
+    VkSemaphore signalSemaphores[] = {renderFinishedSemaphores[*imageIndex]};
     
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -300,8 +292,8 @@ void SwapChain::createDepthResources() {
 }
 
 void SwapChain::createSyncObjects() {
-    imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-    renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+    imageAvailableSemaphores.resize(imageCount());
+    renderFinishedSemaphores.resize(imageCount());
     inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
     imagesInFlight.resize(imageCount(), VK_NULL_HANDLE);
 
@@ -312,10 +304,17 @@ void SwapChain::createSyncObjects() {
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    // Create semaphores per swapchain image
+    for (size_t i = 0; i < imageCount(); i++) {
         if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
-            vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
-            vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
+            vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create synchronization objects for image!");
+        }
+    }
+
+    // Create fences per frame in flight
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS) {
             throw std::runtime_error("failed to create synchronization objects for a frame!");
         }
     }
@@ -362,6 +361,42 @@ VkExtent2D SwapChain::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilit
 
 VkFormat SwapChain::findDepthFormat() {
     return VK_FORMAT_D32_SFLOAT;  // Simplified for now
+}
+
+void SwapChain::cleanupSwapChain() {
+    for (auto framebuffer : swapChainFramebuffers) {
+        vkDestroyFramebuffer(device, framebuffer, nullptr);
+    }
+
+    for (auto imageView : swapChainImageViews) {
+        vkDestroyImageView(device, imageView, nullptr);
+    }
+
+    for (size_t i = 0; i < depthImages.size(); i++) {
+        vkDestroyImageView(device, depthImageViews[i], nullptr);
+        vkDestroyImage(device, depthImages[i], nullptr);
+        vkFreeMemory(device, depthImageMemorys[i], nullptr);
+    }
+
+    vkDestroySwapchainKHR(device, swapChain, nullptr);
+}
+
+void SwapChain::recreateSwapChain() {
+    int width = 0, height = 0;
+    windowRef.getFramebufferSize(&width, &height);
+    while (width == 0 || height == 0) {
+        windowRef.getFramebufferSize(&width, &height);
+        windowRef.waitEvents();
+    }
+
+    vkDeviceWaitIdle(device);
+
+    cleanupSwapChain();
+
+    createSwapChain();
+    createImageViews();
+    createDepthResources();
+    createFramebuffers();
 }
 
 SwapChainSupportDetails SwapChain::querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface) {
