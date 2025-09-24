@@ -10,10 +10,10 @@
 namespace impgine {
 
     const std::vector<Vertex> vertices = {
-        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+        {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+        {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+        {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+        {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
     };
 
     const std::vector<uint16_t> indices = {
@@ -154,8 +154,8 @@ namespace impgine {
         configInfo.rasterizationInfo.rasterizerDiscardEnable = VK_FALSE;
         configInfo.rasterizationInfo.polygonMode = VK_POLYGON_MODE_FILL;
         configInfo.rasterizationInfo.lineWidth = 1.0f;
-        configInfo.rasterizationInfo.cullMode = VK_CULL_MODE_NONE;
-        configInfo.rasterizationInfo.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        configInfo.rasterizationInfo.cullMode = VK_CULL_MODE_BACK_BIT;
+        configInfo.rasterizationInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         configInfo.rasterizationInfo.depthBiasEnable = VK_FALSE;
         configInfo.rasterizationInfo.depthBiasConstantFactor = 0.0f; // Optional
         configInfo.rasterizationInfo.depthBiasClamp = 0.0f; // Optional

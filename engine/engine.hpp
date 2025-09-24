@@ -2,6 +2,14 @@
 
 #include <vulkan/vulkan.h>
 
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include "../external/stb_image.h"
+
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -17,6 +25,12 @@
 #include "camera.hpp"
 
 namespace impgine {
+
+    struct UniformBufferObject {
+        alignas(16) glm::mat4 model;
+        alignas(16) glm::mat4 view;
+        alignas(16) glm::mat4 proj;
+    };
 
     struct QueueFamilyIndices {
         std::optional < uint32_t > graphicsFamily;
@@ -55,7 +69,15 @@ namespace impgine {
         void createCommandPool();
         void createVertexBuffer();
         void createIndexBuffer();
+        void createUniformBuffers();
+        void createDescriptorSetLayout();
+        void createDescriptorPool();
+        void createDescriptorSets();
+        void createTextureImage();
+        void createTextureImageView();
+        void createTextureSampler();
         void createCommandBuffers();
+        void updateUniformBuffer(uint32_t currentImage);
 
         // Helper functions
         bool isDeviceSuitable(VkPhysicalDevice device);
@@ -63,7 +85,13 @@ namespace impgine {
         QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
         uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
         void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+        void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+        VkImageView createImageView(VkImage image, VkFormat format);
+        VkCommandBuffer beginSingleTimeCommands();
+        void endSingleTimeCommands(VkCommandBuffer commandBuffer);
         void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+        void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+        void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
         std::vector <
         const char * > getRequiredExtensions();
 
@@ -115,6 +143,15 @@ namespace impgine {
         VkDeviceMemory vertexBufferMemory;
         VkBuffer indexBuffer;
         VkDeviceMemory indexBufferMemory;
+        std::vector<VkBuffer> uniformBuffers;
+        std::vector<VkDeviceMemory> uniformBuffersMemory;
+        VkDescriptorSetLayout descriptorSetLayout;
+        VkDescriptorPool descriptorPool;
+        std::vector<VkDescriptorSet> descriptorSets;
+        VkImage textureImage;
+        VkDeviceMemory textureImageMemory;
+        VkImageView textureImageView;
+        VkSampler textureSampler;
         std::vector < VkCommandBuffer > commandBuffers;
         VkPipelineLayout pipelineLayout;
 
