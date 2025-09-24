@@ -1,0 +1,225 @@
+# Impgine Engine - Git Ignore File
+# C++/Vulkan/CMake Project
+
+# ===========================
+# Build Directories
+# ===========================
+build/
+Build/
+BUILD/
+out/
+cmake-build-*/
+.vs/
+.vscode/
+bin/
+lib/
+
+# ===========================
+# CMake Generated Files
+# ===========================
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# ===========================
+# Compiled Object Files
+# ===========================
+*.o
+*.obj
+*.ko
+*.elf
+
+# ===========================
+# Precompiled Headers
+# ===========================
+*.gch
+*.pch
+
+# ===========================
+# Compiled Dynamic Libraries
+# ===========================
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# ===========================
+# Compiled Static Libraries
+# ===========================
+*.lai
+*.la
+*.a
+*.lib
+
+# ===========================
+# Executables
+# ===========================
+*.exe
+*.out
+*.app
+Impgnine
+impgnine
+
+# ===========================
+# Debug Files
+# ===========================
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# ===========================
+# Vulkan Specific Files
+# ===========================
+# Compiled SPIR-V shaders
+*.spv
+shaders/*.spv
+
+# Vulkan validation layer cache
+VkLayer_override.txt
+
+# ===========================
+# IDE and Editor Files
+# ===========================
+# Visual Studio
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.vcxproj.filters
+*.sln
+*.user
+*.aps
+*.pch
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.log
+*.svclog
+*.scc
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# CLion
+.idea/
+cmake-build-*/
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+
+# Qt Creator
+CMakeLists.txt.user*
+
+# Code::Blocks
+*.cbp
+*.layout
+*.depend
+
+# Dev-C++
+*.dev
+
+# Eclipse CDT
+.metadata
+.project
+.cproject
+.settings/
+
+# ===========================
+# System Files
+# ===========================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ===========================
+# Package Manager Files
+# ===========================
+# vcpkg
+vcpkg_installed/
+.vcpkg-root
+
+# Conan
+conanfile.pyc
+conandata.yml
+conanbuildinfo.*
+conaninfo.txt
+
+# ===========================
+# Temporary Files
+# ===========================
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# ===========================
+# Log Files
+# ===========================
+*.log
+logs/
+
+# ===========================
+# Documentation Build
+# ===========================
+docs/_build/
+docs/html/
+docs/latex/
+doxygen_output/
+
+# ===========================
+# Testing
+# ===========================
+Testing/
+tests/build/
+*.gcda
+*.gcno
+*.gcov
+
+# ===========================
+# Profiling
+# ===========================
+*.prof
+gmon.out
+
+# ===========================
+# Memory Debugging
+# ===========================
+vgcore.*
+core.*
+
+# ===========================
+# Custom Project Ignores
+# ===========================
+# Add any project-specific files here
+assets/temp/
+screenshots/
+*.local
