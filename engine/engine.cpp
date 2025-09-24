@@ -9,7 +9,7 @@
 namespace impgine {
 
 const std::string Engine::MODEL_PATH = "models/viking_room.obj";
-const std::string Engine::TEXTURE_PATH = "textures/nonexistent.jpg";
+const std::string Engine::TEXTURE_PATH = "textures/viking_room.png";
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                       const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -717,7 +717,7 @@ void Engine::loadModel() {
             vertex.color = {1.0f, 1.0f, 1.0f};
 
             vertices.push_back(vertex);
-            indices.push_back(indices.size());
+            indices.push_back(vertices.size() - 1);
         }
     }
 }
@@ -1219,6 +1219,22 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
         throw std::runtime_error("failed to begin recording command buffer!");
     }
 
+    // Add memory barrier to ensure previous frame is complete
+    VkMemoryBarrier memoryBarrier{};
+    memoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    memoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+    memoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+    
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        0,
+        1, &memoryBarrier,
+        0, nullptr,
+        0, nullptr
+    );
+
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = renderPass;
@@ -1227,9 +1243,9 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
     renderPassInfo.renderArea.extent = swapChain->getSwapChainExtent();
 
     std::array<VkClearValue, 3> clearValues{};
-    clearValues[0].color = {{0.01f, 0.01f, 0.01f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
-    clearValues[2].color = {{0.01f, 0.01f, 0.01f, 1.0f}};
+    clearValues[0].color = {{0.01f, 0.01f, 0.01f, 1.0f}};  // Color attachment (MSAA)
+    clearValues[1].depthStencil = {1.0f, 0};                // Depth attachment
+    clearValues[2].color = {{0.01f, 0.01f, 0.01f, 1.0f}};  // Resolve attachment
     renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
     renderPassInfo.pClearValues = clearValues.data();
 
@@ -1274,8 +1290,8 @@ void Engine::drawFrame() {
     vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex;
-    // We need to guess which image will be available, so we'll use frame-based semaphore for now
-    VkSemaphore imageAvailableSemaphore = swapChain->getImageAvailableSemaphore(currentFrame % swapChain->imageCount());
+    // Use frame-based semaphore for acquire
+    VkSemaphore imageAvailableSemaphore = swapChain->getImageAvailableSemaphore(currentFrame);
     auto result = swapChain->acquireNextImage(&imageIndex, currentFrame, imageAvailableSemaphore);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -1288,7 +1304,7 @@ void Engine::drawFrame() {
     // Only reset the fence if we are submitting work
     vkResetFences(device, 1, &inFlightFence);
 
-    updateUniformBuffer(currentFrame);
+    updateUniformBuffer(imageIndex);
 
     // Reset and record command buffer
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
