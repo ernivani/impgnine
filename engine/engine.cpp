@@ -438,6 +438,10 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 }
 
 void Engine::drawFrame() {
+    // Wait for the previous frame to finish
+    VkFence inFlightFence = swapChain->getInFlightFence();
+    vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+
     uint32_t imageIndex;
     auto result = swapChain->acquireNextImage(&imageIndex);
 
@@ -450,11 +454,10 @@ void Engine::drawFrame() {
         throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    // Wait for the fence and reset it
-    VkFence inFlightFence = swapChain->getInFlightFence();
-    vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+    // Only reset the fence if we are submitting work
     vkResetFences(device, 1, &inFlightFence);
 
+    // Reset and record command buffer
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
     recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
