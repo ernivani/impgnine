@@ -14,6 +14,10 @@ namespace impgine {
         glm::vec3 color;
         glm::vec2 texCoord;
 
+        bool operator==(const Vertex& other) const {
+            return pos == other.pos && color == other.color && texCoord == other.texCoord;
+        }
+
         static VkVertexInputBindingDescription getBindingDescription() {
             VkVertexInputBindingDescription bindingDescription{};
             bindingDescription.binding = 0;
@@ -100,3 +104,28 @@ namespace impgine {
     };
 
 } // namespace impgine
+
+namespace std {
+    template<> struct hash<glm::vec2> {
+        size_t operator()(glm::vec2 const& vertex) const {
+            return ((hash<float>()(vertex.x) ^
+                   (hash<float>()(vertex.y) << 1)) >> 1);
+        }
+    };
+
+    template<> struct hash<glm::vec3> {
+        size_t operator()(glm::vec3 const& vertex) const {
+            return ((hash<float>()(vertex.x) ^
+                   (hash<float>()(vertex.y) << 1)) >> 1) ^
+                   (hash<float>()(vertex.z) << 1);
+        }
+    };
+
+    template<> struct hash<impgine::Vertex> {
+        size_t operator()(impgine::Vertex const& vertex) const {
+            return ((hash<glm::vec3>()(vertex.pos) ^
+                   (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+                   (hash<glm::vec2>()(vertex.texCoord) << 1);
+        }
+    };
+}

@@ -5,8 +5,10 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/hash.hpp>
 
 #include "../external/stb_image.h"
 
@@ -17,6 +19,7 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 #include "backend/buffers.hpp"
@@ -45,6 +48,9 @@ namespace impgine {
     class Engine {
         public: static constexpr int WIDTH = 800;
         static constexpr int HEIGHT = 600;
+        
+        static const std::string MODEL_PATH;
+        static const std::string TEXTURE_PATH;
 
         Engine();
         ~Engine();
@@ -79,6 +85,7 @@ namespace impgine {
         void createTextureSampler();
         void createDepthResources();
         void createCommandBuffers();
+        void loadModel();
         void updateUniformBuffer(uint32_t currentImage);
 
         // Helper functions
@@ -144,6 +151,8 @@ namespace impgine {
         VkQueue graphicsQueue;
         VkQueue presentQueue;
         VkCommandPool commandPool;
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
         VkBuffer vertexBuffer;
         VkDeviceMemory vertexBufferMemory;
         VkBuffer indexBuffer;

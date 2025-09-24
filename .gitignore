@@ -32,7 +32,6 @@ _deps/
 # Compiled Object Files
 # ===========================
 *.o
-*.obj
 *.ko
 *.elf
 
