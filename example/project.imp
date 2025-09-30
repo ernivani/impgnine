@@ -1,0 +1,25 @@
+%IMP Project 1.0
+---
+project:
+  name: Example Project
+  version: 1.0.0
+  engine_version: 1.0.0
+
+settings:
+  window:
+    width: 800
+    height: 600
+    title: Impgine - Example Project
+
+  rendering:
+    msaa_samples: 4
+    vsync: true
+
+assets:
+  scenes_path: assets/scenes
+  models_path: assets/models
+  textures_path: assets/textures
+  shaders_path: engine/shaders
+
+startup:
+  scene: assets/scenes/scene.imp

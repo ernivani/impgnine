@@ -34,7 +34,10 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 
 Engine::Engine() {
-    window = std::make_unique<Window>(WIDTH, HEIGHT, "Impgine");
+    // Load project configuration
+    project = Project::loadProject("example/project.imp");
+
+    window = std::make_unique<Window>(project.windowWidth, project.windowHeight, project.windowTitle);
     window->setUserPointer(this);
     window->setFramebufferSizeCallback(framebufferResizeCallback);
     initVulkan();
@@ -44,7 +47,8 @@ Engine::~Engine() { cleanup(); }
 
 void Engine::run() {
     std::cout << "Welcome to Impgine!\n";
-    loadScene("scenes/scene.txt");
+    loadScene(project.getFullPath(project.startupScene));
+    std::cout << "Project: " << project.projectName << " loaded" << std::endl;
     std::cout << "ECSRegistry currently has " << ECSRegistry::getRegistry().getEntities().size() << " entities" << std::endl;
 
     for (const auto& entity : ECSRegistry::getRegistry().getEntities()) {
@@ -53,7 +57,7 @@ void Engine::run() {
         for (const auto& component : ECSRegistry::getRegistry().getComponents(entity)) {
             std::cout << "Component: " << component.first.name() << std::endl;
         }
-        
+
     }
 
     mainLoop();
@@ -343,10 +347,15 @@ void Engine::loadScene(const std::string& scenePath) {
         if (pe.tag.has_value()) {
             reg.addComponent<impgine::Tag>(e, impgine::Tag{ *pe.tag });
         }
-        reg.addComponent<impgine::MeshRenderer3D>(e, impgine::MeshRenderer3D{ std::make_shared<impgine::Mesh>(pe.modelPath), std::make_shared<impgine::Texture2D>(pe.texturePath), pe.color });
+
+        // Resolve paths relative to project
+        std::string fullModelPath = project.getFullPath(pe.modelPath);
+        std::string fullTexturePath = project.getFullPath(pe.texturePath);
+
+        reg.addComponent<impgine::MeshRenderer3D>(e, impgine::MeshRenderer3D{ std::make_shared<impgine::Mesh>(fullModelPath), std::make_shared<impgine::Texture2D>(fullTexturePath), pe.color });
 
         // Load GPU resources for this entity's mesh
-        loadMeshResources(pe.modelPath, pe.texturePath);
+        loadMeshResources(fullModelPath, fullTexturePath);
     }
 
     createUniformBuffers();
@@ -378,8 +387,9 @@ void Engine::loadScene(const std::string& scenePath) {
     pipelineConfig.pipelineLayout = pipelineLayout;
     pipelineConfig.multisampleInfo.rasterizationSamples = msaaSamples;
 
-    pipeline =
-        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
+    std::string vertShader = project.getFullPath(project.shadersPath + "/vert.spv");
+    std::string fragShader = project.getFullPath(project.shadersPath + "/frag.spv");
+    pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
 
     createCommandBuffers();
 }
@@ -1614,8 +1624,9 @@ void Engine::recreateSwapChain() {
     pipelineConfig.pipelineLayout = pipelineLayout;
     pipelineConfig.multisampleInfo.rasterizationSamples = msaaSamples;
 
-    pipeline =
-        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
+    std::string vertShader = project.getFullPath(project.shadersPath + "/vert.spv");
+    std::string fragShader = project.getFullPath(project.shadersPath + "/frag.spv");
+    pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
 }
 
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
