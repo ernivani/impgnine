@@ -82,12 +82,9 @@ namespace impgine {
         verts.reserve(windows.size() * 30);  // More vertices for detailed UI
 
         auto toNDC = [&](glm::vec2 px) {
-            // Convert screen coordinates to NDC
-            // Screen: (0,0) at top-left, (ww,wh) at bottom-right
-            // NDC: (-1,-1) at top-left, (1,1) at bottom-right
-            float nx = (px.x / static_cast<float>(ww)) * 2.0f - 1.0f;
-            float ny = (px.y / static_cast<float>(wh)) * 2.0f - 1.0f;
-            return glm::vec2(nx, ny);
+            float nx = (px.x / static_cast<float>(swapChain.getSwapChainExtent().width)) * 2.0f - 1.0f;
+            float ny = (px.y / static_cast<float>(swapChain.getSwapChainExtent().height)) * 2.0f - 1.0f;
+            return glm::vec2(nx, -ny);
         };
 
         auto addQuad = [&](glm::vec2 p, glm::vec2 s, glm::vec4 col) {
