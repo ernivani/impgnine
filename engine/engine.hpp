@@ -27,13 +27,33 @@
 #include "backend/swap_chain.hpp"
 #include "backend/window.hpp"
 #include "camera.hpp"
+#include "ECS/ECSRegistry.hpp"
+#include "ECS/components.hpp"
 
 namespace impgine {
 
     struct UniformBufferObject {
-        alignas(16) glm::mat4 model;
         alignas(16) glm::mat4 view;
         alignas(16) glm::mat4 proj;
+    };
+
+    struct PushConstantData {
+        alignas(16) glm::mat4 model;
+    };
+
+    struct MeshGPUResources {
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+        VkBuffer vertexBuffer;
+        VkDeviceMemory vertexBufferMemory;
+        VkBuffer indexBuffer;
+        VkDeviceMemory indexBufferMemory;
+        VkImage textureImage;
+        VkDeviceMemory textureImageMemory;
+        VkImageView textureImageView;
+        VkSampler textureSampler;
+        uint32_t mipLevels;
+        std::vector<VkDescriptorSet> descriptorSets; // Per-frame descriptor sets for this mesh
     };
 
     struct QueueFamilyIndices {
@@ -45,12 +65,11 @@ namespace impgine {
         }
     };
 
+
     class Engine {
         public: static constexpr int WIDTH = 800;
         static constexpr int HEIGHT = 600;
         
-        static const std::string MODEL_PATH;
-        static const std::string TEXTURE_PATH;
 
         Engine();
         ~Engine();
@@ -62,6 +81,7 @@ namespace impgine {
         void run();
 
         private: void initVulkan();
+        void loadScene(const std::string& scenePath);
         void mainLoop();
         void cleanup();
         void cleanupSwapChain();
@@ -79,21 +99,22 @@ namespace impgine {
         void pickPhysicalDevice();
         void createLogicalDevice();
         void createCommandPool();
-        void createVertexBuffer();
-        void createIndexBuffer();
+        void createVertexBuffer(const std::vector<Vertex>& vertices, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+        void createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+        void loadModel(const std::string& path, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices);
         void createUniformBuffers();
         void createDescriptorSetLayout();
         void createDescriptorPool();
         void createDescriptorSets();
-        void createTextureImage();
-        void createTextureImageView();
-        void createTextureSampler();
+        void createTextureImage(const std::string& texturePath, VkImage& image, VkDeviceMemory& imageMemory, uint32_t& mipLevels);
+        VkImageView createTextureImageView(VkImage image, uint32_t mipLevels);
+        VkSampler createTextureSampler(uint32_t mipLevels);
+        MeshGPUResources& loadMeshResources(const std::string& modelPath, const std::string& texturePath);
         void createColorResources();
         void createDepthResources();
         void createRenderPass();
         void createFramebuffers();
         void createCommandBuffers();
-        void loadModel();
         void generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWidth, int32_t texHeight, uint32_t mipLevels);
         void updateUniformBuffer(uint32_t currentImage);
 
@@ -116,6 +137,9 @@ namespace impgine {
         VkSampleCountFlagBits getMaxUsableSampleCount();
         std::vector <
         const char * > getRequiredExtensions();
+
+        // ECS
+        void createECSRegistry();
 
         // Drawing
         void drawFrame();
@@ -161,26 +185,17 @@ namespace impgine {
         VkQueue graphicsQueue;
         VkQueue presentQueue;
         VkCommandPool commandPool;
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
-        VkBuffer vertexBuffer;
-        VkDeviceMemory vertexBufferMemory;
-        VkBuffer indexBuffer;
-        VkDeviceMemory indexBufferMemory;
+        // Resource cache: map from model path to GPU resources
+        std::unordered_map<std::string, MeshGPUResources> meshCache;
         std::vector<VkBuffer> uniformBuffers;
         std::vector<VkDeviceMemory> uniformBuffersMemory;
         VkDescriptorSetLayout descriptorSetLayout;
         VkDescriptorPool descriptorPool;
         std::vector<VkDescriptorSet> descriptorSets;
-        uint32_t mipLevels;
         VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
         VkImage colorImage;
         VkDeviceMemory colorImageMemory;
         VkImageView colorImageView;
-        VkImage textureImage;
-        VkDeviceMemory textureImageMemory;
-        VkImageView textureImageView;
-        VkSampler textureSampler;
         VkImage depthImage;
         VkDeviceMemory depthImageMemory;
         VkImageView depthImageView;

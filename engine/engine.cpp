@@ -5,11 +5,11 @@
 #include <array>
 #include <cstdlib>
 #include <tiny_obj_loader.h>
+#include <fstream>
+#include <sstream>
 
 namespace impgine {
 
-const std::string Engine::MODEL_PATH = "models/viking_room.obj";
-const std::string Engine::TEXTURE_PATH = "textures/viking_room.png";
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance,
                                       const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -44,6 +44,18 @@ Engine::~Engine() { cleanup(); }
 
 void Engine::run() {
     std::cout << "Welcome to Impgine!\n";
+    loadScene("scenes/scene.txt");
+    std::cout << "ECSRegistry currently has " << ECSRegistry::getRegistry().getEntities().size() << " entities" << std::endl;
+
+    for (const auto& entity : ECSRegistry::getRegistry().getEntities()) {
+        std::cout << "Entity: " << entity <<  "have : " << std::endl;
+
+        for (const auto& component : ECSRegistry::getRegistry().getComponents(entity)) {
+            std::cout << "Component: " << component.first.name() << std::endl;
+        }
+        
+    }
+
     mainLoop();
 }
 
@@ -53,6 +65,8 @@ void Engine::initVulkan() {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+
+    createECSRegistry();
     
     // Initialize mouse capture
     window->setCursorInputMode(GLFW_CURSOR_DISABLED);
@@ -61,49 +75,23 @@ void Engine::initVulkan() {
     swapChain = std::make_unique<SwapChain>(device, physicalDevice, surface, *window);
 
     createCommandPool();
-    createTextureImage();
-    createTextureImageView();
-    createTextureSampler();
+    // Defer content loading to loadScene
     createColorResources();
     createDepthResources();
     createRenderPass();
     createFramebuffers();
-    loadModel();
-    createVertexBuffer();
-    createIndexBuffer();
-    createUniformBuffers();
-    createDescriptorSetLayout();
-    createDescriptorPool();
-    createDescriptorSets();
 
-    // Create pipeline layout
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
-
-    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("failed to create pipeline layout!");
-    }
-
-    // Create pipeline
-    PipelineConfigInfo pipelineConfig{};
-    Pipeline::defaultPipelineConfigInfo(pipelineConfig);
-    pipelineConfig.renderPass = renderPass;
-    pipelineConfig.pipelineLayout = pipelineLayout;
-    pipelineConfig.multisampleInfo.rasterizationSamples = msaaSamples;
-
-    pipeline =
-        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
-        
-    createCommandBuffers();
+    // Pipeline will be created after scene resources are ready
 }
 
-void Engine::mainLoop() {
-    auto lastTime = std::chrono::high_resolution_clock::now();
-    
+void Engine::createECSRegistry() {
+    auto& reg = ECSRegistry::getRegistry();
+    (void)reg; 
+}
+
+    void Engine::mainLoop() {
+        auto lastTime = std::chrono::high_resolution_clock::now();
+        
     while (!window->shouldClose()) {
         auto currentTime = std::chrono::high_resolution_clock::now();
         float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
@@ -144,11 +132,18 @@ void Engine::cleanupSwapChain() {
 void Engine::cleanup() {
     cleanupSwapChain();
 
-    vkDestroySampler(device, textureSampler, nullptr);
-    vkDestroyImageView(device, textureImageView, nullptr);
-
-    vkDestroyImage(device, textureImage, nullptr);
-    vkFreeMemory(device, textureImageMemory, nullptr);
+    // Cleanup all mesh resources
+    for (auto& [path, meshResources] : meshCache) {
+        vkDestroySampler(device, meshResources.textureSampler, nullptr);
+        vkDestroyImageView(device, meshResources.textureImageView, nullptr);
+        vkDestroyImage(device, meshResources.textureImage, nullptr);
+        vkFreeMemory(device, meshResources.textureImageMemory, nullptr);
+        vkDestroyBuffer(device, meshResources.indexBuffer, nullptr);
+        vkFreeMemory(device, meshResources.indexBufferMemory, nullptr);
+        vkDestroyBuffer(device, meshResources.vertexBuffer, nullptr);
+        vkFreeMemory(device, meshResources.vertexBufferMemory, nullptr);
+    }
+    meshCache.clear();
 
     for (size_t i = 0; i < uniformBuffers.size(); i++) {
         vkDestroyBuffer(device, uniformBuffers[i], nullptr);
@@ -157,12 +152,6 @@ void Engine::cleanup() {
 
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-
-    vkDestroyBuffer(device, indexBuffer, nullptr);
-    vkFreeMemory(device, indexBufferMemory, nullptr);
-
-    vkDestroyBuffer(device, vertexBuffer, nullptr);
-    vkFreeMemory(device, vertexBufferMemory, nullptr);
 
     if (pipelineLayout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
@@ -228,6 +217,181 @@ void Engine::createInstance() {
     if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
         throw std::runtime_error("failed to create instance!");
     }
+}
+
+void Engine::loadScene(const std::string& scenePath) {
+    // Minimal YAML-like scene format inspired by Unity text:
+    // --- !imp!Entity &id
+    // name: MyEntity
+    // Transform:
+    //   position: {x: 0, y: 0, z: 0}
+    //   rotation: {x: 0, y: 0, z: 0}
+    //   scale: {x: 1, y: 1, z: 1}
+    // Model:
+    //   modelPath: models/viking_room.obj
+    //   texturePath: textures/viking_room.png
+    //   color: {r: 1, g: 1, b: 1}
+
+    std::ifstream file(scenePath);
+    if (!file.is_open()) {
+        std::cerr << "Could not open scene file: " << scenePath << ". Using defaults.\n";
+    }
+
+    struct PendingEntity {
+        std::optional<std::string> tag;
+        glm::vec3 position {0.0f};
+        glm::vec3 rotation {0.0f};
+        glm::vec3 scale {1.0f};
+        std::string modelPath;
+        std::string texturePath;
+        glm::vec3 color {1.0f, 1.0f, 1.0f};
+    };
+
+    std::vector<PendingEntity> entitiesToCreate;
+    PendingEntity current; 
+    bool inEntityBlock = false;
+    enum class Section { None, Transform, MeshRenderer3D };
+    Section section = Section::None;
+
+    auto trim = [](std::string s) {
+        size_t a = s.find_first_not_of(" \t\r\n");
+        size_t b = s.find_last_not_of(" \t\r\n");
+        if (a == std::string::npos) return std::string();
+        return s.substr(a, b - a + 1);
+    };
+
+    auto parseVec3 = [](const std::string& v) -> glm::vec3 {
+        glm::vec3 out{0.0f};
+        std::stringstream ss(v);
+        std::string item; int idx = 0;
+        while (std::getline(ss, item, ',') && idx < 3) {
+            out[idx++] = std::stof(item);
+        }
+        return out;
+    };
+
+    if (file.is_open()) {
+        std::string line;
+        while (std::getline(file, line)) {
+            line = trim(line);
+            if (line.empty() || line[0] == '#') continue;
+            if (line.rfind("%", 0) == 0) continue; // header like %IMP 1.0
+
+            if (line.rfind("---", 0) == 0) {
+                // Start of a new entity block if tagged as !imp!Entity
+                if (line.find("!imp!Entity") != std::string::npos) {
+                    if (inEntityBlock) entitiesToCreate.push_back(current);
+                    inEntityBlock = true;
+                    current = PendingEntity{};
+                    section = Section::None;
+                    continue;
+                }
+            }
+
+            if (line == "Transform:") { section = Section::Transform; continue; }
+            if (line == "MeshRenderer3D:") { section = Section::MeshRenderer3D; continue; }
+
+            auto sep = line.find(':');
+            if (sep == std::string::npos) continue;
+            std::string key = trim(line.substr(0, sep));
+            std::string value = trim(line.substr(sep + 1));
+
+            if (key == "name") {
+                if (!value.empty()) current.tag = value;
+                continue;
+            }
+
+            auto parseObjVec3 = [&](const std::string& obj) -> glm::vec3 {
+                // Expect: {x: a, y: b, z: c} or {r: a, g: b, b: c}
+                glm::vec3 out{0.0f};
+                std::string s = obj;
+                if (!s.empty() && s.front() == '{' && s.back() == '}') {
+                    s = s.substr(1, s.size()-2);
+                }
+                std::stringstream ss2(s);
+                std::string part;
+                while (std::getline(ss2, part, ',')) {
+                    auto colon = part.find(':');
+                    if (colon == std::string::npos) continue;
+                    auto k = trim(part.substr(0, colon));
+                    auto v = trim(part.substr(colon+1));
+                    float f = std::stof(v);
+                    if (k == "x" || k == "r") out.x = f;
+                    else if (k == "y" || k == "g") out.y = f;
+                    else if (k == "z" || k == "b") out.z = f;
+                }
+                return out;
+            };
+
+            if (section == Section::Transform) {
+                if (key == "position") current.position = parseObjVec3(value);
+                else if (key == "rotation") current.rotation = parseObjVec3(value);
+                else if (key == "scale") current.scale = parseObjVec3(value);
+            } else if (section == Section::MeshRenderer3D) {
+                if (key == "modelPath") current.modelPath = value;
+                else if (key == "texturePath") current.texturePath = value;
+                else if (key == "color") current.color = parseObjVec3(value);
+            }
+        }
+        // Flush last block or default
+        if (inEntityBlock) {
+            entitiesToCreate.push_back(current);
+        } else {
+            // If no explicit entity block, use accumulated defaults
+            entitiesToCreate.push_back(current);
+        }
+    } else {
+        // No scene file; create one default entity
+        entitiesToCreate.push_back(PendingEntity{});
+    }
+
+    // Instantiate ECS entities and components
+    auto& reg = ECSRegistry::getRegistry();
+    for (const auto& pe : entitiesToCreate) {
+        Entity e = reg.createEntity();
+        reg.addComponent<impgine::Transform>(e, { pe.position, pe.rotation, pe.scale });
+        if (pe.tag.has_value()) {
+            reg.addComponent<impgine::Tag>(e, impgine::Tag{ *pe.tag });
+        }
+        reg.addComponent<impgine::MeshRenderer3D>(e, impgine::MeshRenderer3D{ std::make_shared<impgine::Mesh>(pe.modelPath), std::make_shared<impgine::Texture2D>(pe.texturePath), pe.color });
+
+        // Load GPU resources for this entity's mesh
+        loadMeshResources(pe.modelPath, pe.texturePath);
+    }
+
+    createUniformBuffers();
+    createDescriptorSetLayout();
+    createDescriptorPool();
+    createDescriptorSets();
+    // Create pipeline layout now that descriptor set layout exists
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(PushConstantData);
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) !=
+        VK_SUCCESS) {
+        throw std::runtime_error("failed to create pipeline layout!");
+    }
+
+    // Create graphics pipeline
+    PipelineConfigInfo pipelineConfig{};
+    Pipeline::defaultPipelineConfigInfo(pipelineConfig);
+    pipelineConfig.renderPass = renderPass;
+    pipelineConfig.pipelineLayout = pipelineLayout;
+    pipelineConfig.multisampleInfo.rasterizationSamples = msaaSamples;
+
+    pipeline =
+        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
+
+    createCommandBuffers();
 }
 
 bool Engine::checkValidationLayerSupport() {
@@ -440,6 +604,9 @@ std::vector<const char*> Engine::getRequiredExtensions() {
     if (enableValidationLayers) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
+
+        // Required on MoltenVK/portability for VK_KHR_portability_subset dependency
+        extensions.push_back("VK_KHR_get_physical_device_properties2");
 
     return extensions;
 }
@@ -689,13 +856,13 @@ void Engine::copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, u
     endSingleTimeCommands(commandBuffer);
 }
 
-void Engine::loadModel() {
+void Engine::loadModel(const std::string& path, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
     std::string warn, err;
 
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, path.c_str())) {
         throw std::runtime_error(err);
     }
 
@@ -711,7 +878,7 @@ void Engine::loadModel() {
                 attrib.vertices[3 * index.vertex_index + 2]
             };
 
-            if (index.texcoord_index >= 0 && index.texcoord_index < attrib.texcoords.size() / 2) {
+            if (index.texcoord_index >= 0 && static_cast<size_t>(index.texcoord_index) < attrib.texcoords.size() / 2) {
                 vertex.texCoord = {
                     attrib.texcoords[2 * index.texcoord_index + 0],
                     1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
@@ -732,7 +899,7 @@ void Engine::loadModel() {
     }
 }
 
-void Engine::createVertexBuffer() {
+void Engine::createVertexBuffer(const std::vector<Vertex>& vertices, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
     VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
     VkBuffer stagingBuffer;
@@ -744,15 +911,15 @@ void Engine::createVertexBuffer() {
         memcpy(data, vertices.data(), (size_t) bufferSize);
     vkUnmapMemory(device, stagingBufferMemory);
 
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, bufferMemory);
 
-    copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+    copyBuffer(stagingBuffer, buffer, bufferSize);
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void Engine::createIndexBuffer() {
+void Engine::createIndexBuffer(const std::vector<uint32_t>& indices, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
     VkBuffer stagingBuffer;
@@ -764,9 +931,9 @@ void Engine::createIndexBuffer() {
     memcpy(data, indices.data(), (size_t) bufferSize);
     vkUnmapMemory(device, stagingBufferMemory);
 
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
+    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, bufferMemory);
 
-    copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+    copyBuffer(stagingBuffer, buffer, bufferSize);
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -779,7 +946,12 @@ void Engine::createUniformBuffers() {
     uniformBuffersMemory.resize(swapChain->imageCount());
 
     for (size_t i = 0; i < swapChain->imageCount(); i++) {
-        createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, uniformBuffers[i], uniformBuffersMemory[i]);
+        createBuffer(
+            bufferSize,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            uniformBuffers[i], uniformBuffersMemory[i]
+        );
     }
 }
 
@@ -810,17 +982,20 @@ void Engine::createDescriptorSetLayout() {
 }
 
 void Engine::createDescriptorPool() {
+    // Calculate total descriptor sets needed: one per mesh per frame
+    uint32_t maxSets = static_cast<uint32_t>(meshCache.size() * swapChain->imageCount());
+
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChain->imageCount());
+    poolSizes[0].descriptorCount = maxSets;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChain->imageCount());
+    poolSizes[1].descriptorCount = maxSets;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(swapChain->imageCount());
+    poolInfo.maxSets = maxSets;
 
     if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");
@@ -828,58 +1003,66 @@ void Engine::createDescriptorPool() {
 }
 
 void Engine::createDescriptorSets() {
-    std::vector<VkDescriptorSetLayout> layouts(swapChain->imageCount(), descriptorSetLayout);
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = descriptorPool;
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(swapChain->imageCount());
-    allocInfo.pSetLayouts = layouts.data();
-
-    descriptorSets.resize(swapChain->imageCount());
-    if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate descriptor sets!");
+    if (meshCache.empty()) {
+        throw std::runtime_error("No meshes loaded before creating descriptor sets!");
     }
 
-    for (size_t i = 0; i < swapChain->imageCount(); i++) {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = uniformBuffers[i];
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(UniformBufferObject);
+    // Create descriptor sets for each mesh
+    for (auto& [modelPath, meshResources] : meshCache) {
+        std::vector<VkDescriptorSetLayout> layouts(swapChain->imageCount(), descriptorSetLayout);
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = descriptorPool;
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(swapChain->imageCount());
+        allocInfo.pSetLayouts = layouts.data();
 
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = textureImageView;
-        imageInfo.sampler = textureSampler;
+        meshResources.descriptorSets.resize(swapChain->imageCount());
+        if (vkAllocateDescriptorSets(device, &allocInfo, meshResources.descriptorSets.data()) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate descriptor sets!");
+        }
 
-        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+        // Update descriptor sets for each frame with this mesh's texture
+        for (size_t i = 0; i < swapChain->imageCount(); i++) {
+            VkDescriptorBufferInfo bufferInfo{};
+            bufferInfo.buffer = uniformBuffers[i];
+            bufferInfo.offset = 0;
+            bufferInfo.range = sizeof(UniformBufferObject);
 
-        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet = descriptorSets[i];
-        descriptorWrites[0].dstBinding = 0;
-        descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo = &bufferInfo;
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = meshResources.textureImageView;
+            imageInfo.sampler = meshResources.textureSampler;
 
-        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[1].dstSet = descriptorSets[i];
-        descriptorWrites[1].dstBinding = 1;
-        descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pImageInfo = &imageInfo;
+            std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
 
-        vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+            descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[0].dstSet = meshResources.descriptorSets[i];
+            descriptorWrites[0].dstBinding = 0;
+            descriptorWrites[0].dstArrayElement = 0;
+            descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            descriptorWrites[0].descriptorCount = 1;
+            descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+            descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[1].dstSet = meshResources.descriptorSets[i];
+            descriptorWrites[1].dstBinding = 1;
+            descriptorWrites[1].dstArrayElement = 0;
+            descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[1].descriptorCount = 1;
+            descriptorWrites[1].pImageInfo = &imageInfo;
+
+            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+        }
     }
 }
 
-void Engine::createTextureImage() {
+void Engine::createTextureImage(const std::string& texturePath, VkImage& image, VkDeviceMemory& imageMemory, uint32_t& mipLevels) {
     int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load(texturePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
     if (!pixels) {
         std::cout << "Texture not found in textures folder, trying the base texture.jpg" << std::endl;
-        // callback to the texture.jpg base image 
+        // callback to the texture.jpg base image
         pixels = stbi_load("textures/texture.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
         if (!pixels) {
@@ -902,23 +1085,23 @@ void Engine::createTextureImage() {
 
     stbi_image_free(pixels);
 
-    createImage(texWidth, texHeight, mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
+    createImage(texWidth, texHeight, mipLevels, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, image, imageMemory);
 
-    transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
-    copyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+    transitionImageLayout(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
+    copyBufferToImage(stagingBuffer, image, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
     //transitionné vers VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL lors de la generation des mipmaps
-    
-    generateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, mipLevels);
+
+    generateMipmaps(image, VK_FORMAT_R8G8B8A8_SRGB, texWidth, texHeight, mipLevels);
 
     vkDestroyBuffer(device, stagingBuffer, nullptr);
     vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void Engine::createTextureImageView() {
-    textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
+VkImageView Engine::createTextureImageView(VkImage image, uint32_t mipLevels) {
+    return createImageView(image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mipLevels);
 }
 
-void Engine::createTextureSampler() {
+VkSampler Engine::createTextureSampler(uint32_t mipLevels) {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -937,9 +1120,31 @@ void Engine::createTextureSampler() {
     samplerInfo.maxLod = static_cast<float>(mipLevels);
     samplerInfo.mipLodBias = 0.0f;
 
-    if (vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler) != VK_SUCCESS) {
+    VkSampler sampler;
+    if (vkCreateSampler(device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
         throw std::runtime_error("échec de la creation d'un sampler!");
     }
+    return sampler;
+}
+
+MeshGPUResources& Engine::loadMeshResources(const std::string& modelPath, const std::string& texturePath) {
+    // Check if already loaded
+    auto it = meshCache.find(modelPath);
+    if (it != meshCache.end()) {
+        return it->second;
+    }
+
+    // Load new mesh
+    MeshGPUResources resources;
+    loadModel(modelPath, resources.vertices, resources.indices);
+    createVertexBuffer(resources.vertices, resources.vertexBuffer, resources.vertexBufferMemory);
+    createIndexBuffer(resources.indices, resources.indexBuffer, resources.indexBufferMemory);
+    createTextureImage(texturePath, resources.textureImage, resources.textureImageMemory, resources.mipLevels);
+    resources.textureImageView = createTextureImageView(resources.textureImage, resources.mipLevels);
+    resources.textureSampler = createTextureSampler(resources.mipLevels);
+
+    meshCache[modelPath] = resources;
+    return meshCache[modelPath];
 }
 
 VkFormat Engine::findSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features) {
@@ -1188,7 +1393,7 @@ void Engine::updateUniformBuffer(uint32_t currentImage) {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+    (void)currentTime; // silence unused for now
 
     // Set up projection matrix (only needs to be set once unless aspect ratio changes)
     camera.setPerspectiveProjection(glm::radians(45.0f), swapChain->getSwapChainExtent().width / (float) swapChain->getSwapChainExtent().height, 0.1f, 100.0f);
@@ -1197,7 +1402,6 @@ void Engine::updateUniformBuffer(uint32_t currentImage) {
     camera.updateViewMatrix();
 
     UniformBufferObject ubo{};
-    ubo.model = glm::rotate(glm::mat4(1.0f), 1 * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.view = camera.getView();
     ubo.proj = camera.getProjection();
 
@@ -1276,16 +1480,44 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     pipeline->bind(commandBuffer);
-    
-    VkBuffer vertexBuffers[] = {vertexBuffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-    
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[imageIndex], 0, nullptr);
-    
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
+    auto &reg = ECSRegistry::getRegistry();
+    const auto entityList = reg.getEntities();
+    for (const Entity e : entityList) {
+        auto &transform = reg.getComponent<impgine::Transform>(e);
+        auto &meshRenderer = reg.getComponent<impgine::MeshRenderer3D>(e);
+
+        // Get the mesh GPU resources
+        auto meshIt = meshCache.find(meshRenderer.mesh->modelPath);
+        if (meshIt == meshCache.end()) {
+            continue; // Skip if mesh not loaded
+        }
+        auto& meshResources = meshIt->second;
+
+        // Bind descriptor set for this mesh (includes its texture)
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &meshResources.descriptorSets[imageIndex], 0, nullptr);
+
+        // Bind vertex and index buffers for this entity's mesh
+        VkBuffer vertexBuffers[] = {meshResources.vertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, meshResources.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        // Build model matrix for this entity
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, transform.position);
+        model = glm::rotate(model, transform.rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
+        model = glm::rotate(model, transform.rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::rotate(model, transform.rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
+        model = glm::scale(model, transform.scale);
+
+        // Push the model matrix via push constants
+        PushConstantData pushData{};
+        pushData.model = model;
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &pushData);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(meshResources.indices.size()), 1, 0, 0, 0);
+    }
 
     vkCmdEndRenderPass(commandBuffer);
 
