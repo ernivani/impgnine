@@ -140,8 +140,9 @@ void Engine::cleanupSwapChain() {
 void Engine::initializeUnityLayout() {
     uiWindows.clear();
 
-    int ww = project.windowWidth;
-    int wh = project.windowHeight;
+    // Get actual framebuffer size, not project config size
+    int ww = 0, wh = 0;
+    window->getFramebufferSize(&ww, &wh);
 
     // Scene view (central viewport) - this is where Vulkan renders
     // Make it invisible since we render the 3D scene directly in this area
@@ -175,6 +176,29 @@ void Engine::initializeUnityLayout() {
     assets.dockPosition = DockPosition::Bottom;
     assets.isVisible = true;
     uiWindows.push_back(assets);
+
+    // Compute layout immediately after creating windows
+    if (uiRenderer) {
+        uiRenderer->getLayout().setWindowSize(ww, wh);
+        uiRenderer->getLayout().computeLayout(uiWindows);
+    }
+
+    // Print UI layout information
+    std::cout << "\n=== UI Layout Initialized ===" << std::endl;
+    std::cout << "Actual framebuffer size: " << ww << "x" << wh << std::endl;
+    if (uiRenderer) {
+        glm::vec4 vp = uiRenderer->getLayout().getViewportRect();
+        std::cout << "Viewport: pos=(" << vp.x << "," << vp.y << ") size=(" << vp.z << "," << vp.w << ")" << std::endl;
+    }
+    for (size_t i = 0; i < uiWindows.size(); i++) {
+        const auto& w = uiWindows[i];
+        if (w.isVisible) {
+            std::cout << "Window " << i << " (" << w.title << "): "
+                      << "pos=(" << w.position.x << "," << w.position.y << ") "
+                      << "size=(" << w.size.x << "," << w.size.y << ")" << std::endl;
+        }
+    }
+    std::cout << "============================\n" << std::endl;
 }
 
 void Engine::cleanup() {
@@ -1802,36 +1826,43 @@ void Engine::handleMouseMovement() {
 }
 
 void Engine::handleUIInput() {
-    // If not captured: left click anywhere on the window captures mouse
+    // Get mouse position in screen coordinates
+    double mx, my;
+    window->getCursorPos(&mx, &my);
+
+    // Scale mouse coordinates to framebuffer coordinates for UI hit testing
+    int windowWidth = 0, windowHeight = 0;
+    int fbWidth = 0, fbHeight = 0;
+    window->getWindowSize(&windowWidth, &windowHeight);
+    window->getFramebufferSize(&fbWidth, &fbHeight);
+
+    float scaleX = (windowWidth > 0) ? static_cast<float>(fbWidth) / static_cast<float>(windowWidth) : 1.0f;
+    float scaleY = (windowHeight > 0) ? static_cast<float>(fbHeight) / static_cast<float>(windowHeight) : 1.0f;
+
+    float mouseX = static_cast<float>(mx) * scaleX;
+    float mouseY = static_cast<float>(my) * scaleY;
+
+    // Check if mouse is over any UI panel
+    bool mouseOverUI = uiRenderer->getLayout().isPointOverUI(mouseX, mouseY, uiWindows);
+
+    // Handle mouse capture for 3D viewport navigation
     if (!mouseCaptured) {
         if (window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-            mouseCaptured = true;
-            window->setCursorInputMode(GLFW_CURSOR_DISABLED);
-            int fbw = 0, fbh = 0; window->getFramebufferSize(&fbw, &fbh);
-            window->setCursorPos(fbw / 2.0, fbh / 2.0);
-            firstMouse = true;
-            return;
+            if (!mouseOverUI) {
+                mouseCaptured = true;
+                window->setCursorInputMode(GLFW_CURSOR_DISABLED);
+
+                // Center cursor
+                int fbw = 0, fbh = 0;
+                window->getFramebufferSize(&fbw, &fbh);
+                window->setCursorPos(fbw / 2.0, fbh / 2.0);
+                firstMouse = true;
+            }
         }
     }
 
-    if (!mouseCaptured && !uiWindows.empty()) {
-        // Drag first window as demo: click inside header area (top 24px)
-        auto& w = uiWindows[0];
-        double mx, my; window->getCursorPos(&mx, &my);
-        bool mouseDown = window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
-        glm::vec2 m = { static_cast<float>(mx), static_cast<float>(my) };
-        bool inHeader = (m.x >= w.position.x && m.x <= w.position.x + w.size.x && m.y >= w.position.y && m.y <= w.position.y + 24.0f);
-        if (mouseDown && !w.isDragging && inHeader) {
-            w.isDragging = true;
-            w.dragOffset = m - w.position;
-        }
-        if (!mouseDown && w.isDragging) {
-            w.isDragging = false;
-        }
-        if (w.isDragging) {
-            w.position = m - w.dragOffset;
-        }
-    }
+    // Handle UI window dragging (optional feature)
+    // Currently disabled, but can be re-enabled for floating windows
 }
 
 bool Engine::compileShader(const std::string& sourcePath, const std::string& outputPath, const std::string& shaderType) {

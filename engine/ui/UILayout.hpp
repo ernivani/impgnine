@@ -18,15 +18,18 @@ namespace impgine {
 
         void setWindowSize(int width, int height);
 
+        // Check if a point is inside any UI window (not the viewport)
+        bool isPointOverUI(float x, float y, const std::vector<UIWindow>& windows) const;
+
     private:
         int windowWidth;
         int windowHeight;
 
-        // Layout constraints
+        // Layout constraints (panel sizes)
         float leftPanelWidth = 250.0f;
         float rightPanelWidth = 300.0f;
         float bottomPanelHeight = 200.0f;
-        float topBarHeight = 0.0f;  // Optional toolbar
+        float topPanelHeight = 40.0f;
 
         // Calculated viewport rectangle (x, y, width, height)
         glm::vec4 viewportRect;

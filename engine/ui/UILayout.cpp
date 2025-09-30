@@ -1,11 +1,12 @@
 #include "UILayout.hpp"
+#include <iostream>
 
 namespace impgine {
 
     UILayout::UILayout(int windowWidth, int windowHeight)
         : windowWidth(windowWidth), windowHeight(windowHeight) {
-        std::vector<UIWindow> empty;
-        computeLayout(empty);
+        // Initialize with empty viewport
+        viewportRect = glm::vec4(0.0f, 0.0f, static_cast<float>(windowWidth), static_cast<float>(windowHeight));
     }
 
     void UILayout::setWindowSize(int width, int height) {
@@ -14,81 +15,109 @@ namespace impgine {
     }
 
     void UILayout::computeLayout(std::vector<UIWindow>& windows) {
-        // Calculate available space for each docked position
-        float leftX = 0.0f;
-        float rightX = static_cast<float>(windowWidth);
-        float topY = topBarHeight;
-        float bottomY = static_cast<float>(windowHeight);
+        /*
+         * Coordinate system: (0,0) at top-left, (width, height) at bottom-right
+         *
+         * Layout structure:
+         * +----------------------------------+
+         * |  LEFT   |   VIEWPORT   |  RIGHT |
+         * |  PANEL  |   (CENTER)   |  PANEL |
+         * |         |              |        |
+         * |         +--------------+        |
+         * |         |    BOTTOM    |        |
+         * +----------------------------------+
+         */
 
-        // First pass: identify which dock positions are occupied
+        // Initialize viewport to full window
+        float vpLeft = 0.0f;
+        float vpTop = 0.0f;
+        float vpRight = static_cast<float>(windowWidth);
+        float vpBottom = static_cast<float>(windowHeight);
+
+        // Check which panels exist
         bool hasLeft = false, hasRight = false, hasBottom = false, hasTop = false;
-        for (const auto& window : windows) {
-            if (!window.isVisible || window.dockPosition == DockPosition::Floating) continue;
-
-            switch (window.dockPosition) {
-                case DockPosition::Left: hasLeft = true; break;
-                case DockPosition::Right: hasRight = true; break;
-                case DockPosition::Bottom: hasBottom = true; break;
-                case DockPosition::Top: hasTop = true; break;
-                default: break;
-            }
+        for (const auto& win : windows) {
+            if (!win.isVisible) continue;
+            if (win.dockPosition == DockPosition::Left) hasLeft = true;
+            if (win.dockPosition == DockPosition::Right) hasRight = true;
+            if (win.dockPosition == DockPosition::Bottom) hasBottom = true;
+            if (win.dockPosition == DockPosition::Top) hasTop = true;
         }
 
-        // Adjust boundaries based on docked panels
-        if (hasLeft) leftX += leftPanelWidth;
-        if (hasRight) rightX -= rightPanelWidth;
-        if (hasBottom) bottomY -= bottomPanelHeight;
-        if (hasTop) topY += topBarHeight;
+        // Carve out space for panels from viewport
+        if (hasLeft) vpLeft += leftPanelWidth;
+        if (hasRight) vpRight -= rightPanelWidth;
+        if (hasTop) vpTop += topPanelHeight;
+        if (hasBottom) vpBottom -= bottomPanelHeight;
 
-        // Calculate center viewport rectangle
-        viewportRect = glm::vec4(leftX, topY, rightX - leftX, bottomY - topY);
+        // Store viewport rectangle
+        viewportRect.x = vpLeft;
+        viewportRect.y = vpTop;
+        viewportRect.z = vpRight - vpLeft;   // width
+        viewportRect.w = vpBottom - vpTop;   // height
 
-        // Second pass: position all docked windows
-        for (auto& window : windows) {
-            if (!window.isVisible || window.dockPosition == DockPosition::Floating) continue;
-            layoutDockedWindow(window);
+        // Position all windows
+        for (auto& win : windows) {
+            if (!win.isVisible) continue;
+            layoutDockedWindow(win);
         }
     }
 
     void UILayout::layoutDockedWindow(UIWindow& window) {
+        float winWidth = static_cast<float>(windowWidth);
+        float winHeight = static_cast<float>(windowHeight);
+
         switch (window.dockPosition) {
             case DockPosition::Left:
-                // Left panel: full height on the left side
-                window.position = glm::vec2(0.0f, topBarHeight);
-                window.size = glm::vec2(leftPanelWidth, static_cast<float>(windowHeight) - topBarHeight);
+                // Left side, full height
+                window.position = glm::vec2(0.0f, 0.0f);
+                window.size = glm::vec2(leftPanelWidth, winHeight);
                 break;
 
             case DockPosition::Right:
-                // Right panel: full height on the right side
-                window.position = glm::vec2(static_cast<float>(windowWidth) - rightPanelWidth, topBarHeight);
-                window.size = glm::vec2(rightPanelWidth, static_cast<float>(windowHeight) - topBarHeight);
+                // Right side, full height
+                window.position = glm::vec2(winWidth - rightPanelWidth, 0.0f);
+                window.size = glm::vec2(rightPanelWidth, winHeight);
                 break;
-
-            case DockPosition::Bottom: {
-                // Bottom panel: spans between left and right panels, at the bottom
-                float leftMargin = leftPanelWidth;
-                float rightMargin = rightPanelWidth;
-                float availableWidth = static_cast<float>(windowWidth) - leftMargin - rightMargin;
-
-                window.position = glm::vec2(leftMargin, topBarHeight);
-                window.size = glm::vec2(availableWidth, bottomPanelHeight);
-                break;
-            }
 
             case DockPosition::Top:
+                // Top, full width
                 window.position = glm::vec2(0.0f, 0.0f);
-                window.size = glm::vec2(static_cast<float>(windowWidth), topBarHeight);
+                window.size = glm::vec2(winWidth, topPanelHeight);
+                break;
+
+            case DockPosition::Bottom:
+                // Bottom, between left and right panels
+                window.position = glm::vec2(viewportRect.x, winHeight - bottomPanelHeight);
+                window.size = glm::vec2(viewportRect.z, bottomPanelHeight);
                 break;
 
             case DockPosition::Center:
-                // Center viewport: between all the panels
+                // Center viewport area
                 window.position = glm::vec2(viewportRect.x, viewportRect.y);
                 window.size = glm::vec2(viewportRect.z, viewportRect.w);
                 break;
 
-            default:
+            case DockPosition::Floating:
+                // Don't modify floating windows
                 break;
         }
+    }
+
+    bool UILayout::isPointOverUI(float x, float y, const std::vector<UIWindow>& windows) const {
+        // Check if point is over any visible UI window (excluding center viewport)
+        for (const auto& win : windows) {
+            if (!win.isVisible) continue;
+            if (win.type == UIWindowType::SceneView) continue; // Skip viewport
+
+            bool inX = (x >= win.position.x) && (x <= win.position.x + win.size.x);
+            bool inY = (y >= win.position.y) && (y <= win.position.y + win.size.y);
+
+            if (inX && inY) {
+                return true;
+            }
+        }
+        return false;
     }
 
 } // namespace impgine
