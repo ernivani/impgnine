@@ -88,7 +88,7 @@ namespace impgine {
 
             case DockPosition::Bottom:
                 // Bottom, between left and right panels
-                window.position = glm::vec2(viewportRect.x, winHeight - bottomPanelHeight);
+                window.position = glm::vec2(viewportRect.x, 0.0f);
                 window.size = glm::vec2(viewportRect.z, bottomPanelHeight);
                 break;
 
@@ -110,8 +110,14 @@ namespace impgine {
             if (!win.isVisible) continue;
             if (win.type == UIWindowType::SceneView) continue; // Skip viewport
 
+            // For bottom panel, the render position is at Y=0 but hit testing should be at bottom
+            float hitY = win.position.y;
+            if (win.dockPosition == DockPosition::Bottom) {
+                hitY = static_cast<float>(windowHeight) - win.size.y;
+            }
+
             bool inX = (x >= win.position.x) && (x <= win.position.x + win.size.x);
-            bool inY = (y >= win.position.y) && (y <= win.position.y + win.size.y);
+            bool inY = (y >= hitY) && (y <= hitY + win.size.y);
 
             if (inX && inY) {
                 return true;

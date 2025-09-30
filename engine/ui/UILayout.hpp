@@ -34,6 +34,9 @@ namespace impgine {
         // Calculated viewport rectangle (x, y, width, height)
         glm::vec4 viewportRect;
 
+        // Bottom panel Y position (computed during layout)
+        float bottomPanelY = 0.0f;
+
         void layoutDockedWindow(UIWindow& window);
     };
 
