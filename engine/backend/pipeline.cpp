@@ -75,15 +75,27 @@ namespace impgine {
         shaderStages[1].pNext = nullptr;
         shaderStages[1].pSpecializationInfo = nullptr;
 
-        auto bindingDescription = Vertex::getBindingDescription();
-        auto attributeDescriptions = Vertex::getAttributeDescriptions();
-        
+        // Use provided binding/attribute descriptions if present, otherwise default to Vertex
         VkPipelineVertexInputStateCreateInfo vertexInputInfo {};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertexInputInfo.vertexBindingDescriptionCount = 1;
-        vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-        vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+        std::array<VkVertexInputBindingDescription,1> defaultBinding { Vertex::getBindingDescription() };
+        auto defaultAttributes = Vertex::getAttributeDescriptions();
+        const VkVertexInputBindingDescription* bindingPtr = defaultBinding.data();
+        const VkVertexInputAttributeDescription* attrPtr = defaultAttributes.data();
+        uint32_t bindingCount = 1;
+        uint32_t attrCount = static_cast<uint32_t>(defaultAttributes.size());
+        if (!configInfo.bindingDescriptions.empty()) {
+            bindingPtr = configInfo.bindingDescriptions.data();
+            bindingCount = static_cast<uint32_t>(configInfo.bindingDescriptions.size());
+        }
+        if (!configInfo.attributeDescriptions.empty()) {
+            attrPtr = configInfo.attributeDescriptions.data();
+            attrCount = static_cast<uint32_t>(configInfo.attributeDescriptions.size());
+        }
+        vertexInputInfo.vertexBindingDescriptionCount = bindingCount;
+        vertexInputInfo.vertexAttributeDescriptionCount = attrCount;
+        vertexInputInfo.pVertexBindingDescriptions = bindingPtr;
+        vertexInputInfo.pVertexAttributeDescriptions = attrPtr;
 
         VkGraphicsPipelineCreateInfo pipelineInfo {};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;

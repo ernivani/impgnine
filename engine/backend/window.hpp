@@ -38,6 +38,8 @@ namespace impgine {
         void getCursorPos(double* xpos, double* ypos) const;
         void setCursorPos(double xpos, double ypos) const;
         void setCursorInputMode(int mode) const;
+        bool isMouseButtonPressed(int button) const;
+        void getWindowSize(int* outWidth, int* outHeight) const;
 
         private: int width;
         int height;

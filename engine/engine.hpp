@@ -30,6 +30,8 @@
 #include "ECS/ECSRegistry.hpp"
 #include "ECS/components.hpp"
 #include "project.hpp"
+#include "ui/UIRenderer.hpp"
+#include "ui/UIWindow.hpp"
 
 namespace impgine {
 
@@ -94,6 +96,7 @@ namespace impgine {
         // Input handling
         void processInput(float deltaTime);
         void handleMouseMovement();
+        void handleUIInput();
 
         // Vulkan initialization functions
         void createInstance();
@@ -219,6 +222,13 @@ namespace impgine {
         double lastMouseY = HEIGHT / 2.0;
         bool firstMouse = true;
         bool mouseCaptured = true;  // Start with mouse captured
+
+        // UI
+        std::unique_ptr<UIRenderer> uiRenderer;
+        std::vector<UIWindow> uiWindows;
+
+        // Helper to initialize Unity-like UI layout
+        void initializeUnityLayout();
     };
 
     // Helper functions (in global namespace within impgine)

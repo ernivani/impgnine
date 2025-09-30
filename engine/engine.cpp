@@ -55,7 +55,7 @@ void Engine::run() {
     std::cout << "ECSRegistry currently has " << ECSRegistry::getRegistry().getEntities().size() << " entities" << std::endl;
 
     for (const auto& entity : ECSRegistry::getRegistry().getEntities()) {
-        std::cout << "Entity: " << entity <<  "have : " << std::endl;
+        std::cout << "Entity: " << entity <<  ", have components: " << std::endl;
 
         for (const auto& component : ECSRegistry::getRegistry().getComponents(entity)) {
             std::cout << "Component: " << component.first.name() << std::endl;
@@ -105,6 +105,7 @@ void Engine::createECSRegistry() {
         lastTime = currentTime;
         
         window->pollEvents();
+        handleUIInput();
         processInput(deltaTime);
         handleMouseMovement();
         drawFrame();
@@ -136,7 +137,51 @@ void Engine::cleanupSwapChain() {
     }
     }
 
+void Engine::initializeUnityLayout() {
+    uiWindows.clear();
+
+    int ww = project.windowWidth;
+    int wh = project.windowHeight;
+
+    // Scene view (central viewport) - this is where Vulkan renders
+    // Make it invisible since we render the 3D scene directly in this area
+    UIWindow sceneView;
+    sceneView.title = "Scene";
+    sceneView.type = UIWindowType::SceneView;
+    sceneView.dockPosition = DockPosition::Center;
+    sceneView.isVisible = false;  // Don't draw UI for center viewport
+    uiWindows.push_back(sceneView);
+
+    // Hierarchy (left panel) - scene tree
+    UIWindow hierarchy;
+    hierarchy.title = "Hierarchy";
+    hierarchy.type = UIWindowType::Hierarchy;
+    hierarchy.dockPosition = DockPosition::Left;
+    hierarchy.isVisible = true;
+    uiWindows.push_back(hierarchy);
+
+    // Inspector (right panel) - object properties
+    UIWindow inspector;
+    inspector.title = "Inspector";
+    inspector.type = UIWindowType::Inspector;
+    inspector.dockPosition = DockPosition::Right;
+    inspector.isVisible = true;
+    uiWindows.push_back(inspector);
+
+    // Assets (bottom panel) - asset browser
+    UIWindow assets;
+    assets.title = "Assets";
+    assets.type = UIWindowType::Assets;
+    assets.dockPosition = DockPosition::Bottom;
+    assets.isVisible = true;
+    uiWindows.push_back(assets);
+}
+
 void Engine::cleanup() {
+    // Destroy UI resources before destroying device
+    if (uiRenderer) {
+        uiRenderer.reset();
+    }
     cleanupSwapChain();
 
     // Cleanup all mesh resources
@@ -395,6 +440,16 @@ void Engine::loadScene(const std::string& scenePath) {
     pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
 
     createCommandBuffers();
+
+    // Initialize UI renderer and a default window
+    {
+        std::string uiVert = project.getFullPath(project.shadersPath + "/ui.vert.spv");
+        std::string uiFrag = project.getFullPath(project.shadersPath + "/ui.frag.spv");
+        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, *swapChain, msaaSamples, uiVert, uiFrag);
+
+        // Initialize Unity-like layout
+        initializeUnityLayout();
+    }
 }
 
 bool Engine::checkValidationLayerSupport() {
@@ -1466,19 +1521,43 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(swapChain->getSwapChainExtent().width);
-    viewport.height = static_cast<float>(swapChain->getSwapChainExtent().height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    // Set viewport/scissor to UI center viewport so 3D scene renders only in middle
+    if (uiRenderer) {
+        // Ensure layout is up to date before using it (use framebuffer size for DPI correctness)
+        int ww = 0, wh = 0;
+        window->getFramebufferSize(&ww, &wh);
+        uiRenderer->getLayout().setWindowSize(ww, wh);
+        uiRenderer->getLayout().computeLayout(uiWindows);
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = swapChain->getSwapChainExtent();
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+        glm::vec4 rect = uiRenderer->getLayout().getViewportRect();
+        VkViewport viewport{};
+        viewport.x = rect.x;
+        viewport.y = rect.y;
+        viewport.width = rect.z;
+        viewport.height = rect.w;
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = { static_cast<int32_t>(rect.x), static_cast<int32_t>(rect.y) };
+        scissor.extent = { static_cast<uint32_t>(rect.z), static_cast<uint32_t>(rect.w) };
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    } else {
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(swapChain->getSwapChainExtent().width);
+        viewport.height = static_cast<float>(swapChain->getSwapChainExtent().height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = {0, 0};
+        scissor.extent = swapChain->getSwapChainExtent();
+        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    }
 
     pipeline->bind(commandBuffer);
 
@@ -1518,6 +1597,11 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &pushData);
 
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(meshResources.indices.size()), 1, 0, 0, 0);
+    }
+
+    // Draw UI on top
+    if (uiRenderer) {
+        uiRenderer->record(commandBuffer, *window, uiWindows);
     }
 
     vkCmdEndRenderPass(commandBuffer);
@@ -1630,6 +1714,14 @@ void Engine::recreateSwapChain() {
     std::string vertShader = project.getFullPath(project.shadersPath + "/vert.spv");
     std::string fragShader = project.getFullPath(project.shadersPath + "/frag.spv");
     pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
+
+    // Recreate UI renderer with new render pass and extent
+    if (uiRenderer) {
+        uiRenderer.reset();
+        std::string uiVert = project.getFullPath(project.shadersPath + "/ui.vert.spv");
+        std::string uiFrag = project.getFullPath(project.shadersPath + "/ui.frag.spv");
+        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, *swapChain, msaaSamples, uiVert, uiFrag);
+    }
 }
 
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
@@ -1677,9 +1769,12 @@ void Engine::processInput(float deltaTime) {
         camera.moveDown(moveSpeed * deltaTime);
     }
     
-    // ESC to close application
+    // ESC to release mouse capture
     if (window->isKeyPressed(GLFW_KEY_ESCAPE)) {
-        glfwSetWindowShouldClose(window->getGLFWWindow(), GLFW_TRUE);
+        if (mouseCaptured) {
+            mouseCaptured = false;
+            window->setCursorInputMode(GLFW_CURSOR_NORMAL);
+        }
     }
 }
 
@@ -1706,6 +1801,39 @@ void Engine::handleMouseMovement() {
     camera.rotatePitch(static_cast<float>(yoffset * sensitivity));
 }
 
+void Engine::handleUIInput() {
+    // If not captured: left click anywhere on the window captures mouse
+    if (!mouseCaptured) {
+        if (window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+            mouseCaptured = true;
+            window->setCursorInputMode(GLFW_CURSOR_DISABLED);
+            int fbw = 0, fbh = 0; window->getFramebufferSize(&fbw, &fbh);
+            window->setCursorPos(fbw / 2.0, fbh / 2.0);
+            firstMouse = true;
+            return;
+        }
+    }
+
+    if (!mouseCaptured && !uiWindows.empty()) {
+        // Drag first window as demo: click inside header area (top 24px)
+        auto& w = uiWindows[0];
+        double mx, my; window->getCursorPos(&mx, &my);
+        bool mouseDown = window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+        glm::vec2 m = { static_cast<float>(mx), static_cast<float>(my) };
+        bool inHeader = (m.x >= w.position.x && m.x <= w.position.x + w.size.x && m.y >= w.position.y && m.y <= w.position.y + 24.0f);
+        if (mouseDown && !w.isDragging && inHeader) {
+            w.isDragging = true;
+            w.dragOffset = m - w.position;
+        }
+        if (!mouseDown && w.isDragging) {
+            w.isDragging = false;
+        }
+        if (w.isDragging) {
+            w.position = m - w.dragOffset;
+        }
+    }
+}
+
 bool Engine::compileShader(const std::string& sourcePath, const std::string& outputPath, const std::string& shaderType) {
     std::string command = "glslc " + sourcePath + " -o " + outputPath;
     std::cout << "Compiling " << shaderType << " shader: " << sourcePath << std::endl;
@@ -1725,11 +1853,18 @@ void Engine::compileShaders() {
     std::string fragSource = shaderPath + "/shader.frag";
     std::string vertOutput = shaderPath + "/vert.spv";
     std::string fragOutput = shaderPath + "/frag.spv";
+    // UI shaders
+    std::string uiVertSrc = shaderPath + "/ui.vert";
+    std::string uiFragSrc = shaderPath + "/ui.frag";
+    std::string uiVertOut = shaderPath + "/ui.vert.spv";
+    std::string uiFragOut = shaderPath + "/ui.frag.spv";
 
     bool vertSuccess = compileShader(vertSource, vertOutput, "vertex");
     bool fragSuccess = compileShader(fragSource, fragOutput, "fragment");
+    bool uiVertSuccess = compileShader(uiVertSrc, uiVertOut, "vertex");
+    bool uiFragSuccess = compileShader(uiFragSrc, uiFragOut, "fragment");
 
-    if (!vertSuccess || !fragSuccess) {
+    if (!vertSuccess || !fragSuccess || !uiVertSuccess || !uiFragSuccess) {
         throw std::runtime_error("Failed to compile shaders");
     }
     std::cout << "All shaders compiled successfully!" << std::endl;
