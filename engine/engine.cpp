@@ -37,6 +37,9 @@ Engine::Engine() {
     // Load project configuration
     project = Project::loadProject("example/project.imp");
 
+    // Compile shaders before initializing Vulkan
+    compileShaders();
+
     window = std::make_unique<Window>(project.windowWidth, project.windowHeight, project.windowTitle);
     window->setUserPointer(this);
     window->setFramebufferSizeCallback(framebufferResizeCallback);
@@ -1701,6 +1704,35 @@ void Engine::handleMouseMovement() {
     const float sensitivity = 0.002f; // Adjust as needed
     camera.rotateYaw(static_cast<float>(xoffset * sensitivity));
     camera.rotatePitch(static_cast<float>(yoffset * sensitivity));
+}
+
+bool Engine::compileShader(const std::string& sourcePath, const std::string& outputPath, const std::string& shaderType) {
+    std::string command = "glslc " + sourcePath + " -o " + outputPath;
+    std::cout << "Compiling " << shaderType << " shader: " << sourcePath << std::endl;
+    int result = std::system(command.c_str());
+    if (result != 0) {
+        std::cerr << "Failed to compile shader: " << sourcePath << std::endl;
+        return false;
+    }
+    std::cout << "Successfully compiled " << shaderType << " shader to " << outputPath << std::endl;
+    return true;
+}
+
+void Engine::compileShaders() {
+    std::cout << "Compiling shaders..." << std::endl;
+    std::string shaderPath = project.getFullPath(project.shadersPath);
+    std::string vertSource = shaderPath + "/shader.vert";
+    std::string fragSource = shaderPath + "/shader.frag";
+    std::string vertOutput = shaderPath + "/vert.spv";
+    std::string fragOutput = shaderPath + "/frag.spv";
+
+    bool vertSuccess = compileShader(vertSource, vertOutput, "vertex");
+    bool fragSuccess = compileShader(fragSource, fragOutput, "fragment");
+
+    if (!vertSuccess || !fragSuccess) {
+        throw std::runtime_error("Failed to compile shaders");
+    }
+    std::cout << "All shaders compiled successfully!" << std::endl;
 }
 
 }  // namespace impgine

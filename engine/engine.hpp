@@ -86,7 +86,11 @@ namespace impgine {
         void mainLoop();
         void cleanup();
         void cleanupSwapChain();
-        
+
+        // Shader compilation
+        bool compileShader(const std::string& sourcePath, const std::string& outputPath, const std::string& shaderType);
+        void compileShaders();
+
         // Input handling
         void processInput(float deltaTime);
         void handleMouseMovement();
