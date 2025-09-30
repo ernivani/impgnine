@@ -29,6 +29,7 @@
 #include "camera.hpp"
 #include "ECS/ECSRegistry.hpp"
 #include "ECS/components.hpp"
+#include "project.hpp"
 
 namespace impgine {
 
@@ -85,7 +86,11 @@ namespace impgine {
         void mainLoop();
         void cleanup();
         void cleanupSwapChain();
-        
+
+        // Shader compilation
+        bool compileShader(const std::string& sourcePath, const std::string& outputPath, const std::string& shaderType);
+        void compileShaders();
+
         // Input handling
         void processInput(float deltaTime);
         void handleMouseMovement();
@@ -154,6 +159,7 @@ namespace impgine {
             const VkDebugUtilsMessengerCallbackDataEXT * pCallbackData, void * pUserData);
 
         // Member variables
+        ProjectSettings project;
         std::unique_ptr < Window > window;
         std::unique_ptr < Pipeline > pipeline;
         std::unique_ptr < SwapChain > swapChain;

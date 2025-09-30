@@ -34,7 +34,13 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
 }
 
 Engine::Engine() {
-    window = std::make_unique<Window>(WIDTH, HEIGHT, "Impgine");
+    // Load project configuration
+    project = Project::loadProject("example/project.imp");
+
+    // Compile shaders before initializing Vulkan
+    compileShaders();
+
+    window = std::make_unique<Window>(project.windowWidth, project.windowHeight, project.windowTitle);
     window->setUserPointer(this);
     window->setFramebufferSizeCallback(framebufferResizeCallback);
     initVulkan();
@@ -44,7 +50,8 @@ Engine::~Engine() { cleanup(); }
 
 void Engine::run() {
     std::cout << "Welcome to Impgine!\n";
-    loadScene("scenes/scene.txt");
+    loadScene(project.getFullPath(project.startupScene));
+    std::cout << "Project: " << project.projectName << " loaded" << std::endl;
     std::cout << "ECSRegistry currently has " << ECSRegistry::getRegistry().getEntities().size() << " entities" << std::endl;
 
     for (const auto& entity : ECSRegistry::getRegistry().getEntities()) {
@@ -53,7 +60,7 @@ void Engine::run() {
         for (const auto& component : ECSRegistry::getRegistry().getComponents(entity)) {
             std::cout << "Component: " << component.first.name() << std::endl;
         }
-        
+
     }
 
     mainLoop();
@@ -343,10 +350,15 @@ void Engine::loadScene(const std::string& scenePath) {
         if (pe.tag.has_value()) {
             reg.addComponent<impgine::Tag>(e, impgine::Tag{ *pe.tag });
         }
-        reg.addComponent<impgine::MeshRenderer3D>(e, impgine::MeshRenderer3D{ std::make_shared<impgine::Mesh>(pe.modelPath), std::make_shared<impgine::Texture2D>(pe.texturePath), pe.color });
+
+        // Resolve paths relative to project
+        std::string fullModelPath = project.getFullPath(pe.modelPath);
+        std::string fullTexturePath = project.getFullPath(pe.texturePath);
+
+        reg.addComponent<impgine::MeshRenderer3D>(e, impgine::MeshRenderer3D{ std::make_shared<impgine::Mesh>(fullModelPath), std::make_shared<impgine::Texture2D>(fullTexturePath), pe.color });
 
         // Load GPU resources for this entity's mesh
-        loadMeshResources(pe.modelPath, pe.texturePath);
+        loadMeshResources(fullModelPath, fullTexturePath);
     }
 
     createUniformBuffers();
@@ -378,8 +390,9 @@ void Engine::loadScene(const std::string& scenePath) {
     pipelineConfig.pipelineLayout = pipelineLayout;
     pipelineConfig.multisampleInfo.rasterizationSamples = msaaSamples;
 
-    pipeline =
-        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
+    std::string vertShader = project.getFullPath(project.shadersPath + "/vert.spv");
+    std::string fragShader = project.getFullPath(project.shadersPath + "/frag.spv");
+    pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
 
     createCommandBuffers();
 }
@@ -1614,8 +1627,9 @@ void Engine::recreateSwapChain() {
     pipelineConfig.pipelineLayout = pipelineLayout;
     pipelineConfig.multisampleInfo.rasterizationSamples = msaaSamples;
 
-    pipeline =
-        std::make_unique<Pipeline>(device, "shaders/vert.spv", "shaders/frag.spv", pipelineConfig);
+    std::string vertShader = project.getFullPath(project.shadersPath + "/vert.spv");
+    std::string fragShader = project.getFullPath(project.shadersPath + "/frag.spv");
+    pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
 }
 
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height) {
@@ -1690,6 +1704,35 @@ void Engine::handleMouseMovement() {
     const float sensitivity = 0.002f; // Adjust as needed
     camera.rotateYaw(static_cast<float>(xoffset * sensitivity));
     camera.rotatePitch(static_cast<float>(yoffset * sensitivity));
+}
+
+bool Engine::compileShader(const std::string& sourcePath, const std::string& outputPath, const std::string& shaderType) {
+    std::string command = "glslc " + sourcePath + " -o " + outputPath;
+    std::cout << "Compiling " << shaderType << " shader: " << sourcePath << std::endl;
+    int result = std::system(command.c_str());
+    if (result != 0) {
+        std::cerr << "Failed to compile shader: " << sourcePath << std::endl;
+        return false;
+    }
+    std::cout << "Successfully compiled " << shaderType << " shader to " << outputPath << std::endl;
+    return true;
+}
+
+void Engine::compileShaders() {
+    std::cout << "Compiling shaders..." << std::endl;
+    std::string shaderPath = project.getFullPath(project.shadersPath);
+    std::string vertSource = shaderPath + "/shader.vert";
+    std::string fragSource = shaderPath + "/shader.frag";
+    std::string vertOutput = shaderPath + "/vert.spv";
+    std::string fragOutput = shaderPath + "/frag.spv";
+
+    bool vertSuccess = compileShader(vertSource, vertOutput, "vertex");
+    bool fragSuccess = compileShader(fragSource, fragOutput, "fragment");
+
+    if (!vertSuccess || !fragSuccess) {
+        throw std::runtime_error("Failed to compile shaders");
+    }
+    std::cout << "All shaders compiled successfully!" << std::endl;
 }
 
 }  // namespace impgine
