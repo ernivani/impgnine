@@ -13,6 +13,7 @@
 #include "UIWindow.hpp"
 #include "UILayout.hpp"
 #include "TextRenderer.hpp"
+#include "../ECS/ECSRegistry.hpp"
 
 namespace impgine {
 
@@ -56,6 +57,10 @@ namespace impgine {
         void renderText(const std::string& text, glm::vec2 position, float scale, glm::vec4 color, std::vector<UIVertex>& verts);
         void createDescriptorSets();
 
+        // Interaction
+        void handleMouseClick(double xpos, double ypos, std::vector<UIWindow>& windows);
+        Entity getSelectedEntity() const { return selectedEntity; }
+
     private:
         void createVertexBuffer(VkDeviceSize size);
         void createDescriptorSetLayout();
@@ -78,6 +83,8 @@ namespace impgine {
 
         UILayout layout;
         std::unique_ptr<TextRenderer> textRenderer;
+
+        Entity selectedEntity = INVALID_ENTITY;
     };
 
 } // namespace impgine

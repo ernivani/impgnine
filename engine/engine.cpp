@@ -43,6 +43,7 @@ Engine::Engine() {
     window = std::make_unique<Window>(project.windowWidth, project.windowHeight, project.windowTitle);
     window->setUserPointer(this);
     window->setFramebufferSizeCallback(framebufferResizeCallback);
+    glfwSetMouseButtonCallback(window->getGLFWWindow(), mouseButtonCallback);
     initVulkan();
 }
 
@@ -1752,6 +1753,11 @@ void Engine::recreateSwapChain() {
         std::string uiVert = project.getFullPath(project.shadersPath + "/ui.vert.spv");
         std::string uiFrag = project.getFullPath(project.shadersPath + "/ui.frag.spv");
         uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, commandPool, graphicsQueue, *swapChain, msaaSamples, uiVert, uiFrag);
+
+        // Reload font and create descriptor sets
+        std::string fontPath = project.getFullPath("engine/ttf/arial.ttf");
+        uiRenderer->getTextRenderer()->loadFont(fontPath, 48);
+        uiRenderer->createDescriptorSets();
     }
 }
 
@@ -1760,6 +1766,29 @@ void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height
     (void)height;
     auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
     app->framebufferResized = true;
+}
+
+void Engine::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    (void)mods;
+    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+
+        // Convert to framebuffer coordinates
+        int fbWidth, fbHeight;
+        glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
+        int winWidth, winHeight;
+        glfwGetWindowSize(window, &winWidth, &winHeight);
+
+        xpos = xpos * fbWidth / winWidth;
+        ypos = ypos * fbHeight / winHeight;
+
+        if (app->uiRenderer) {
+            app->uiRenderer->handleMouseClick(xpos, ypos, app->uiWindows);
+        }
+    }
 }
 
 VKAPI_ATTR VkBool32 VKAPI_CALL

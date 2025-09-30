@@ -97,6 +97,7 @@ namespace impgine {
         void processInput(float deltaTime);
         void handleMouseMovement();
         void handleUIInput();
+        static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
         // Vulkan initialization functions
         void createInstance();

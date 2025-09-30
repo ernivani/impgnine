@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <iostream>
+#include "../ECS/components.hpp"
 
 namespace impgine {
 
@@ -145,16 +146,115 @@ namespace impgine {
             // Draw title bar
             glm::vec2 titleBarPos = { p.x + w.borderWidth, p.y + w.borderWidth };
             glm::vec2 titleBarSize = { s.x - 2.0f * w.borderWidth, w.titleBarHeight };
-            addQuad(titleBarPos, titleBarSize, w.titleBarColor);
+            if (w.titleBarHeight > 0.0f) {
+                addQuad(titleBarPos, titleBarSize, w.titleBarColor);
+
+                // Render title bar text
+                glm::vec2 titleTextPos = { p.x + w.borderWidth + 10.0f, p.y + w.borderWidth + 8.0f };
+                renderText(w.title, titleTextPos, 0.4f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
+            }
 
             // Draw content area background
             glm::vec2 contentPos = { p.x + w.borderWidth, p.y + w.borderWidth + w.titleBarHeight };
             glm::vec2 contentSize = { s.x - 2.0f * w.borderWidth, s.y - w.titleBarHeight - 2.0f * w.borderWidth };
             addQuad(contentPos, contentSize, w.backgroundColor);
-        }
 
-        // Render "Hello World" text at top-left corner
-        renderText("Hello World", {10, 30}, 1.0f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
+            // Render content based on window type
+            if (w.type == UIWindowType::Hierarchy) {
+                auto& registry = ECSRegistry::getRegistry();
+                const auto& entities = registry.getEntities();
+
+                float yOffset = contentPos.y + 10.0f;
+                float lineHeight = 25.0f;
+
+                for (const auto& entity : entities) {
+                    // Get Tag component to display entity name
+                    std::string entityName = "Entity " + std::to_string(entity);
+
+                    try {
+                        const auto& tag = registry.getComponent<Tag>(entity);
+                        if (!tag.tag.empty()) {
+                            entityName = tag.tag;
+                        }
+                    } catch (...) {
+                        // Entity doesn't have Tag component, use default name
+                    }
+
+                    // Highlight selected entity
+                    glm::vec4 textColor = (entity == selectedEntity) ? glm::vec4(0.3f, 0.6f, 1.0f, 1.0f) : glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+                    glm::vec2 textPos = { contentPos.x + 10.0f, yOffset };
+                    renderText(entityName, textPos, 0.4f, textColor, verts);
+                    yOffset += lineHeight;
+                }
+            } else if (w.type == UIWindowType::Inspector) {
+                // Display selected entity details
+                if (selectedEntity != INVALID_ENTITY) {
+                    auto& registry = ECSRegistry::getRegistry();
+
+                    float yOffset = contentPos.y + 10.0f;
+                    float lineHeight = 25.0f;
+
+                    // Entity name
+                    std::string entityName = "Entity " + std::to_string(selectedEntity);
+                    try {
+                        const auto& tag = registry.getComponent<Tag>(selectedEntity);
+                        if (!tag.tag.empty()) {
+                            entityName = tag.tag;
+                        }
+                    } catch (...) {}
+
+                    glm::vec2 textPos = { contentPos.x + 10.0f, yOffset };
+                    renderText(entityName, textPos, 0.5f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
+                    yOffset += lineHeight * 1.5f;
+
+                    // Transform component
+                    try {
+                        const auto& transform = registry.getComponent<Transform>(selectedEntity);
+
+                        renderText("Transform:", {contentPos.x + 10.0f, yOffset}, 0.4f, {0.8f, 0.8f, 0.8f, 1.0f}, verts);
+                        yOffset += lineHeight;
+
+                        std::string posStr = "Pos: " + std::to_string((int)transform.position.x) + ", " +
+                                            std::to_string((int)transform.position.y) + ", " +
+                                            std::to_string((int)transform.position.z);
+                        renderText(posStr, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
+                        yOffset += lineHeight;
+
+                        std::string rotStr = "Rot: " + std::to_string((int)transform.rotation.x) + ", " +
+                                            std::to_string((int)transform.rotation.y) + ", " +
+                                            std::to_string((int)transform.rotation.z);
+                        renderText(rotStr, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
+                        yOffset += lineHeight;
+
+                        std::string scaleStr = "Scale: " + std::to_string(transform.scale.x).substr(0, 4) + ", " +
+                                              std::to_string(transform.scale.y).substr(0, 4) + ", " +
+                                              std::to_string(transform.scale.z).substr(0, 4);
+                        renderText(scaleStr, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
+                        yOffset += lineHeight * 1.5f;
+                    } catch (...) {}
+
+                    // MeshRenderer3D component
+                    try {
+                        const auto& meshRenderer = registry.getComponent<MeshRenderer3D>(selectedEntity);
+
+                        renderText("MeshRenderer3D:", {contentPos.x + 10.0f, yOffset}, 0.4f, {0.8f, 0.8f, 0.8f, 1.0f}, verts);
+                        yOffset += lineHeight;
+
+                        if (meshRenderer.mesh) {
+                            std::string meshPath = meshRenderer.mesh->modelPath;
+                            // Show only filename
+                            size_t lastSlash = meshPath.find_last_of("/\\");
+                            if (lastSlash != std::string::npos) {
+                                meshPath = meshPath.substr(lastSlash + 1);
+                            }
+                            renderText("Mesh: " + meshPath, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
+                        }
+                        yOffset += lineHeight;
+                    } catch (...) {}
+                }
+            }
+        }
 
         if (verts.empty()) return;
 
@@ -166,9 +266,11 @@ namespace impgine {
 
         pipeline->bind(cmd);
 
-        // Bind descriptor set for font texture
+        // Bind descriptor set for font texture - must always bind to match pipeline layout
         if (!descriptorSets.empty() && imageIndex < descriptorSets.size()) {
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipelineLayout, 0, 1, &descriptorSets[imageIndex], 0, nullptr);
+        } else {
+            std::cerr << "Warning: UI descriptor sets not available! descriptorSets.size()=" << descriptorSets.size() << ", imageIndex=" << imageIndex << std::endl;
         }
 
         // Set viewport/scissor to full framebuffer
@@ -254,7 +356,15 @@ namespace impgine {
     }
 
     void UIRenderer::createDescriptorSets() {
-        if (!textRenderer) return;
+        if (!textRenderer) {
+            std::cerr << "TextRenderer is null in createDescriptorSets!" << std::endl;
+            return;
+        }
+
+        if (!textRenderer->getTextureView() || !textRenderer->getSampler()) {
+            std::cerr << "Font texture not loaded yet!" << std::endl;
+            return;
+        }
 
         std::vector<VkDescriptorSetLayout> layouts(swapChain.imageCount(), descriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
@@ -264,9 +374,13 @@ namespace impgine {
         allocInfo.pSetLayouts = layouts.data();
 
         descriptorSets.resize(swapChain.imageCount());
-        if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+        VkResult result = vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data());
+        if (result != VK_SUCCESS) {
+            std::cerr << "Failed to allocate UI descriptor sets! VkResult: " << result << std::endl;
             throw std::runtime_error("Failed to allocate UI descriptor sets");
         }
+
+        std::cout << "Created " << descriptorSets.size() << " UI descriptor sets" << std::endl;
 
         for (size_t i = 0; i < swapChain.imageCount(); i++) {
             VkDescriptorImageInfo imageInfo{};
@@ -284,6 +398,42 @@ namespace impgine {
             descriptorWrite.pImageInfo = &imageInfo;
 
             vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+        }
+    }
+
+    void UIRenderer::handleMouseClick(double xpos, double ypos, std::vector<UIWindow>& windows) {
+        auto& registry = ECSRegistry::getRegistry();
+        const auto& entities = registry.getEntities();
+
+        for (const auto& w : windows) {
+            if (!w.isVisible || w.type != UIWindowType::Hierarchy) continue;
+
+            // Check if click is in hierarchy window content area
+            glm::vec2 contentPos = { w.position.x + w.borderWidth, w.position.y + w.borderWidth + w.titleBarHeight };
+            glm::vec2 contentSize = { w.size.x - 2.0f * w.borderWidth, w.size.y - w.titleBarHeight - 2.0f * w.borderWidth };
+
+            if (xpos >= contentPos.x && xpos <= contentPos.x + contentSize.x &&
+                ypos >= contentPos.y && ypos <= contentPos.y + contentSize.y) {
+
+                // Calculate which entity was clicked
+                float yOffset = contentPos.y + 10.0f;
+                float lineHeight = 25.0f;
+                int index = 0;
+
+                for (const auto& entity : entities) {
+                    float itemTop = yOffset;
+                    float itemBottom = yOffset + lineHeight;
+
+                    if (ypos >= itemTop && ypos < itemBottom) {
+                        selectedEntity = entity;
+                        std::cout << "Selected entity: " << entity << std::endl;
+                        return;
+                    }
+
+                    yOffset += lineHeight;
+                    index++;
+                }
+            }
         }
     }
 

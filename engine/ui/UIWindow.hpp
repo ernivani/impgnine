@@ -39,11 +39,11 @@ namespace impgine {
         glm::vec2 dragOffset { 0.0f, 0.0f };
 
         // UI styling
-        glm::vec4 backgroundColor { 0.08f, 0.08f, 0.08f, 0.95f };
+        glm::vec4 backgroundColor { 0.08f, 0.08f, 0.08f, 1.0f };
         glm::vec4 titleBarColor { 0.12f, 0.12f, 0.12f, 1.0f };
-        glm::vec4 borderColor { 0.2f, 0.2f, 0.2f, 1.0f };
+        glm::vec4 borderColor { 0.08f, 0.08f, 0.08f, 1.0f };
         float titleBarHeight { 30.0f };
-        float borderWidth { 2.0f };
+        float borderWidth { 0.0f };
 
         // Helper methods
         bool isPointInTitleBar(const glm::vec2& point) const {
