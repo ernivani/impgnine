@@ -1,18 +1,36 @@
 #include "UIRenderer.hpp"
 
 #include <cstring>
+#include <iostream>
 
 namespace impgine {
 
-    UIRenderer::UIRenderer(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass, VkPipelineLayout pipelineLayout, SwapChain& swapChain, VkSampleCountFlagBits samples, const std::string& vertSpvPath, const std::string& fragSpvPath)
+    UIRenderer::UIRenderer(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass, VkPipelineLayout pipelineLayout, VkCommandPool commandPool, VkQueue graphicsQueue, SwapChain& swapChain, VkSampleCountFlagBits samples, const std::string& vertSpvPath, const std::string& fragSpvPath)
         : device(device), physicalDevice(physicalDevice), pipelineLayout(pipelineLayout), swapChain(swapChain), samples(samples), vertPath(vertSpvPath), fragPath(fragSpvPath),
           layout(swapChain.getSwapChainExtent().width, swapChain.getSwapChainExtent().height) {
+
+        textRenderer = std::make_unique<TextRenderer>(device, physicalDevice, commandPool, graphicsQueue);
+
+        // Create UI-specific descriptor set layout and pipeline layout
+        createDescriptorSetLayout();
+        createDescriptorPool();
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &uiPipelineLayout) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create UI pipeline layout");
+        }
 
         PipelineConfigInfo cfg{};
         Pipeline::defaultPipelineConfigInfo(cfg);
         Pipeline::enableAlphaBlending(cfg);
         cfg.renderPass = renderPass;
-        cfg.pipelineLayout = pipelineLayout;
+        cfg.pipelineLayout = uiPipelineLayout;
         cfg.multisampleInfo.rasterizationSamples = samples;
         cfg.depthStencilInfo.depthTestEnable = VK_FALSE;
         cfg.depthStencilInfo.depthWriteEnable = VK_FALSE;
@@ -29,6 +47,15 @@ namespace impgine {
     }
 
     UIRenderer::~UIRenderer() {
+        if (descriptorPool != VK_NULL_HANDLE) {
+            vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+        }
+        if (descriptorSetLayout != VK_NULL_HANDLE) {
+            vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+        }
+        if (uiPipelineLayout != VK_NULL_HANDLE) {
+            vkDestroyPipelineLayout(device, uiPipelineLayout, nullptr);
+        }
         if (vertexBuffer != VK_NULL_HANDLE) {
             vkDestroyBuffer(device, vertexBuffer, nullptr);
         }
@@ -68,7 +95,7 @@ namespace impgine {
         vkBindBufferMemory(device, vertexBuffer, vertexMemory, 0);
     }
 
-    void UIRenderer::record(VkCommandBuffer cmd, const Window& window, std::vector<UIWindow>& windows) {
+    void UIRenderer::record(VkCommandBuffer cmd, const Window& window, std::vector<UIWindow>& windows, uint32_t imageIndex) {
         // Update layout dimensions if window was resized
         int ww = 0, wh = 0;
         window.getFramebufferSize(&ww, &wh);
@@ -93,12 +120,12 @@ namespace impgine {
             glm::vec2 p2 = toNDC({ p.x + s.x, p.y + s.y });
             glm::vec2 p3 = toNDC({ p.x, p.y + s.y });
 
-            verts.push_back({ p0, col });
-            verts.push_back({ p1, col });
-            verts.push_back({ p2, col });
-            verts.push_back({ p0, col });
-            verts.push_back({ p2, col });
-            verts.push_back({ p3, col });
+            verts.push_back({ p0, col, {0.0f, 0.0f} });
+            verts.push_back({ p1, col, {0.0f, 0.0f} });
+            verts.push_back({ p2, col, {0.0f, 0.0f} });
+            verts.push_back({ p0, col, {0.0f, 0.0f} });
+            verts.push_back({ p2, col, {0.0f, 0.0f} });
+            verts.push_back({ p3, col, {0.0f, 0.0f} });
         };
 
         for (const auto& w : windows) {
@@ -126,6 +153,9 @@ namespace impgine {
             addQuad(contentPos, contentSize, w.backgroundColor);
         }
 
+        // Render "Hello World" text at top-left corner
+        renderText("Hello World", {10, 30}, 1.0f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
+
         if (verts.empty()) return;
 
         // Upload to vertex buffer
@@ -136,6 +166,11 @@ namespace impgine {
 
         pipeline->bind(cmd);
 
+        // Bind descriptor set for font texture
+        if (!descriptorSets.empty() && imageIndex < descriptorSets.size()) {
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, uiPipelineLayout, 0, 1, &descriptorSets[imageIndex], 0, nullptr);
+        }
+
         // Set viewport/scissor to full framebuffer
         VkViewport vp{}; vp.x = 0; vp.y = 0; vp.width = static_cast<float>(swapChain.getSwapChainExtent().width); vp.height = static_cast<float>(swapChain.getSwapChainExtent().height); vp.minDepth = 0.0f; vp.maxDepth = 1.0f;
         vkCmdSetViewport(cmd, 0, 1, &vp);
@@ -145,6 +180,111 @@ namespace impgine {
         VkDeviceSize offset = 0;
         vkCmdBindVertexBuffers(cmd, 0, 1, &vertexBuffer, &offset);
         vkCmdDraw(cmd, static_cast<uint32_t>(verts.size()), 1, 0, 0);
+    }
+
+    void UIRenderer::renderText(const std::string& text, glm::vec2 position, float scale, glm::vec4 color, std::vector<UIVertex>& verts) {
+        if (!textRenderer) return;
+
+        auto toNDC = [&](glm::vec2 px) {
+            float nx = (px.x / static_cast<float>(swapChain.getSwapChainExtent().width)) * 2.0f - 1.0f;
+            float ny = (px.y / static_cast<float>(swapChain.getSwapChainExtent().height)) * 2.0f - 1.0f;
+            return glm::vec2(nx, -ny);
+        };
+
+        float xpos = position.x;
+        float ypos = position.y;
+
+        for (char c : text) {
+            const Character* ch = textRenderer->getCharacter(c);
+            if (!ch) continue;
+
+            float w = ch->size.x * scale;
+            float h = ch->size.y * scale;
+            float x = xpos + ch->bearing.x * scale;
+            float y = ypos - (ch->size.y - ch->bearing.y) * scale;
+
+            glm::vec2 p0 = toNDC({ x, y });
+            glm::vec2 p1 = toNDC({ x + w, y });
+            glm::vec2 p2 = toNDC({ x + w, y + h });
+            glm::vec2 p3 = toNDC({ x, y + h });
+
+            verts.push_back({ p0, color, { ch->texCoordMin.x, ch->texCoordMax.y } });
+            verts.push_back({ p1, color, { ch->texCoordMax.x, ch->texCoordMax.y } });
+            verts.push_back({ p2, color, { ch->texCoordMax.x, ch->texCoordMin.y } });
+            verts.push_back({ p0, color, { ch->texCoordMin.x, ch->texCoordMax.y } });
+            verts.push_back({ p2, color, { ch->texCoordMax.x, ch->texCoordMin.y } });
+            verts.push_back({ p3, color, { ch->texCoordMin.x, ch->texCoordMin.y } });
+
+            xpos += (ch->advance >> 6) * scale;
+        }
+    }
+
+    void UIRenderer::createDescriptorSetLayout() {
+        VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+        samplerLayoutBinding.binding = 0;
+        samplerLayoutBinding.descriptorCount = 1;
+        samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        samplerLayoutBinding.pImmutableSamplers = nullptr;
+        samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.bindingCount = 1;
+        layoutInfo.pBindings = &samplerLayoutBinding;
+
+        if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create UI descriptor set layout");
+        }
+    }
+
+    void UIRenderer::createDescriptorPool() {
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        poolSize.descriptorCount = static_cast<uint32_t>(swapChain.imageCount());
+
+        VkDescriptorPoolCreateInfo poolInfo{};
+        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.poolSizeCount = 1;
+        poolInfo.pPoolSizes = &poolSize;
+        poolInfo.maxSets = static_cast<uint32_t>(swapChain.imageCount());
+
+        if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to create UI descriptor pool");
+        }
+    }
+
+    void UIRenderer::createDescriptorSets() {
+        if (!textRenderer) return;
+
+        std::vector<VkDescriptorSetLayout> layouts(swapChain.imageCount(), descriptorSetLayout);
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = descriptorPool;
+        allocInfo.descriptorSetCount = static_cast<uint32_t>(swapChain.imageCount());
+        allocInfo.pSetLayouts = layouts.data();
+
+        descriptorSets.resize(swapChain.imageCount());
+        if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+            throw std::runtime_error("Failed to allocate UI descriptor sets");
+        }
+
+        for (size_t i = 0; i < swapChain.imageCount(); i++) {
+            VkDescriptorImageInfo imageInfo{};
+            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageView = textRenderer->getTextureView();
+            imageInfo.sampler = textRenderer->getSampler();
+
+            VkWriteDescriptorSet descriptorWrite{};
+            descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrite.dstSet = descriptorSets[i];
+            descriptorWrite.dstBinding = 0;
+            descriptorWrite.dstArrayElement = 0;
+            descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrite.descriptorCount = 1;
+            descriptorWrite.pImageInfo = &imageInfo;
+
+            vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+        }
     }
 
 } // namespace impgine

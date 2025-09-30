@@ -469,7 +469,14 @@ void Engine::loadScene(const std::string& scenePath) {
     {
         std::string uiVert = project.getFullPath(project.shadersPath + "/ui.vert.spv");
         std::string uiFrag = project.getFullPath(project.shadersPath + "/ui.frag.spv");
-        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, *swapChain, msaaSamples, uiVert, uiFrag);
+        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, commandPool, graphicsQueue, *swapChain, msaaSamples, uiVert, uiFrag);
+
+        // Load Arial font and create descriptor sets
+        std::string fontPath = project.getFullPath("engine/ttf/arial.ttf");
+        uiRenderer->getTextRenderer()->loadFont(fontPath, 48);
+
+        // Create descriptor sets after font texture is loaded
+        uiRenderer->createDescriptorSets();
 
         // Initialize Unity-like layout
         initializeUnityLayout();
@@ -1625,7 +1632,7 @@ void Engine::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIn
 
     // Draw UI on top
     if (uiRenderer) {
-        uiRenderer->record(commandBuffer, *window, uiWindows);
+        uiRenderer->record(commandBuffer, *window, uiWindows, imageIndex);
     }
 
     vkCmdEndRenderPass(commandBuffer);
@@ -1744,7 +1751,7 @@ void Engine::recreateSwapChain() {
         uiRenderer.reset();
         std::string uiVert = project.getFullPath(project.shadersPath + "/ui.vert.spv");
         std::string uiFrag = project.getFullPath(project.shadersPath + "/ui.frag.spv");
-        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, *swapChain, msaaSamples, uiVert, uiFrag);
+        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, commandPool, graphicsQueue, *swapChain, msaaSamples, uiVert, uiFrag);
     }
 }
 
