@@ -260,16 +260,6 @@ void Engine::loadScene(const std::string& scenePath) {
         return s.substr(a, b - a + 1);
     };
 
-    auto parseVec3 = [](const std::string& v) -> glm::vec3 {
-        glm::vec3 out{0.0f};
-        std::stringstream ss(v);
-        std::string item; int idx = 0;
-        while (std::getline(ss, item, ',') && idx < 3) {
-            out[idx++] = std::stof(item);
-        }
-        return out;
-    };
-
     if (file.is_open()) {
         std::string line;
         while (std::getline(file, line)) {
@@ -1390,8 +1380,6 @@ void Engine::generateMipmaps(VkImage image, VkFormat imageFormat, int32_t texWid
 }
 
 void Engine::updateUniformBuffer(uint32_t currentImage) {
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
     auto currentTime = std::chrono::high_resolution_clock::now();
     (void)currentTime; // silence unused for now
 
