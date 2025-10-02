@@ -161,14 +161,24 @@ namespace impgine {
             addQuad(contentPos, contentSize, w.backgroundColor);
 
             // Render UI components in this window
+            // Strategy: collect rects in currentVertices, add them to verts, then text is added
             currentVertices.clear();
+
+            // First collect vertices where text should be inserted
+            size_t textInsertPoint = verts.size();
+
+            // Render components (adds rects to currentVertices, text directly to verts)
             for (const auto& comp : w.components) {
-                UIComponentRenderer::renderComponent(*this, *comp, contentPos);
+                UIComponentRenderer::renderComponent(*this, *comp, contentPos, verts);
             }
-            // Convert currentVertices to NDC and add to verts
+
+            // Now insert the rects (currentVertices) at the textInsertPoint
+            // This puts rects BEFORE text (drawn behind)
+            std::vector<UIVertex> rectsConverted;
             for (const auto& v : currentVertices) {
-                verts.push_back({ toNDC(v.pos), v.color, v.uv });
+                rectsConverted.push_back({ toNDC(v.pos), v.color, v.uv });
             }
+            verts.insert(verts.begin() + textInsertPoint, rectsConverted.begin(), rectsConverted.end());
 
             // Render content based on window type
             if (w.type == UIWindowType::Hierarchy) {

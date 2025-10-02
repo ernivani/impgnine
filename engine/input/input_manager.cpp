@@ -70,11 +70,6 @@ void InputManager::handleMouseMovement() {
 }
 
 void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float mouseX, float mouseY, int fbWidth, int fbHeight) {
-    static int debugCounter = 0;
-    if (debugCounter++ % 60 == 0) { // Print every 60 frames
-        std::cout << "Mouse: (" << mouseX << ", " << mouseY << ") | FB: " << fbWidth << "x" << fbHeight << std::endl;
-    }
-
     // Reset all component states to normal first
     for (auto& window : uiWindows) {
         for (auto& comp : window.components) {
@@ -171,6 +166,11 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
 void InputManager::characterCallback(GLFWwindow* window, unsigned int codepoint, std::vector<UIWindow>& uiWindows) {
     (void)window;
 
+    // Debug character input
+    if (codepoint == 'a' || codepoint == 'A') {
+        std::cout << "Character callback received: '" << static_cast<char>(codepoint) << "'" << std::endl;
+    }
+
     // Find focused input field
     for (auto& uiWindow : uiWindows) {
         if (!uiWindow.isVisible) continue;
@@ -188,11 +188,24 @@ void InputManager::characterCallback(GLFWwindow* window, unsigned int codepoint,
 }
 
 void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods, std::vector<UIWindow>& uiWindows) {
-    (void)window;
     (void)scancode;
-    (void)mods;
 
     if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
+
+    bool ctrlHeld = (mods & GLFW_MOD_CONTROL) != 0;
+    bool cmdHeld = (mods & GLFW_MOD_SUPER) != 0;  // Command key on Mac
+    bool shiftHeld = (mods & GLFW_MOD_SHIFT) != 0;
+    bool altHeld = (mods & GLFW_MOD_ALT) != 0;    // Option key on Mac
+
+    // Debug: print ALL keys with modifiers, and also plain 'A'
+    if (cmdHeld || ctrlHeld || key == GLFW_KEY_A) {
+        std::cout << "keyCallback: key=" << key << " char='" << (char)key << "' (GLFW_KEY_A=" << GLFW_KEY_A
+                  << " GLFW_KEY_Q=" << GLFW_KEY_Q << ") ctrl=" << ctrlHeld << " cmd=" << cmdHeld
+                  << " shift=" << shiftHeld << " mods=" << mods << std::endl;
+    }
+
+    // On Mac, use Cmd for shortcuts; on other platforms, use Ctrl
+    bool modifierHeld = cmdHeld || ctrlHeld;
 
     // Find focused input field
     for (auto& uiWindow : uiWindows) {
@@ -202,12 +215,72 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
             if (comp->type == UIComponentType::InputField && comp->state == UIComponentState::Focused) {
                 auto input = std::dynamic_pointer_cast<UIInputField>(comp);
                 if (input) {
+                    // Handle Cmd/Ctrl shortcuts
+                    // Use glfwGetKeyName to get the actual character for keyboard layout independence
+                    if (modifierHeld) {
+                        const char* keyName = glfwGetKeyName(key, scancode);
+                        std::cout << "modifierHeld=true, key=" << key << " keyName=" << (keyName ? keyName : "null") << std::endl;
+
+                        // Match by character name (works across all keyboard layouts)
+                        if (keyName && strlen(keyName) == 1) {
+                            char keyChar = tolower(keyName[0]);
+
+                            if (keyChar == 'c') {
+                                // Copy
+                                if (input->hasSelection()) {
+                                    glfwSetClipboardString(window, input->getSelectedText().c_str());
+                                }
+                            } else if (keyChar == 'x') {
+                                // Cut
+                                if (input->hasSelection()) {
+                                    glfwSetClipboardString(window, input->getSelectedText().c_str());
+                                    input->deleteSelection();
+                                }
+                            } else if (keyChar == 'v') {
+                                // Paste
+                                const char* clipboardText = glfwGetClipboardString(window);
+                                if (clipboardText) {
+                                    input->insertText(std::string(clipboardText));
+                                }
+                            } else if (keyChar == 'a') {
+                                std::cout << "MATCHED 'a'!" << std::endl;
+                                // Select all
+                                input->selectAll();
+                                std::cout << "Select All: text='" << input->text << "' selStart=" << input->selectionStart
+                                          << " selEnd=" << input->selectionEnd << " cursor=" << input->cursorPosition << std::endl;
+                            }
+                        }
+
+                        // Also handle arrow keys for Cmd+Left/Right
+                        if (key == GLFW_KEY_LEFT) {
+                            // Cmd+Left: Jump to start of line (Mac)
+                            input->moveCursorToStart(shiftHeld);
+                        } else if (key == GLFW_KEY_RIGHT) {
+                            // Cmd+Right: Jump to end of line (Mac)
+                            input->moveCursorToEnd(shiftHeld);
+                        }
+                        return;
+                    }
+
+                    // Mac-specific: Option+Arrow for word jumping (future enhancement)
+                    if (altHeld && (key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)) {
+                        // TODO: Implement word-by-word navigation
+                        // For now, just do regular movement
+                    }
+
+                    // Handle navigation and editing
                     if (key == GLFW_KEY_BACKSPACE) {
                         input->deleteChar();
+                    } else if (key == GLFW_KEY_DELETE) {
+                        input->deleteForward();
                     } else if (key == GLFW_KEY_LEFT) {
-                        input->moveCursorLeft();
+                        input->moveCursorLeft(shiftHeld);
                     } else if (key == GLFW_KEY_RIGHT) {
-                        input->moveCursorRight();
+                        input->moveCursorRight(shiftHeld);
+                    } else if (key == GLFW_KEY_HOME) {
+                        input->moveCursorToStart(shiftHeld);
+                    } else if (key == GLFW_KEY_END) {
+                        input->moveCursorToEnd(shiftHeld);
                     } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_ESCAPE) {
                         // Unfocus on Enter/Escape
                         comp->state = UIComponentState::Normal;
@@ -282,6 +355,13 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
                                     }
                                 }
                                 comp->state = UIComponentState::Focused;
+
+                                // Set cursor position based on click location
+                                float relativeX = xpos - (absolutePos.x + input->padding);
+                                size_t clickPos = input->getCursorFromPixelOffset(relativeX);
+                                input->cursorPosition = clickPos;
+                                input->selectionStart = clickPos;
+                                input->selectionEnd = clickPos;
                             }
                             break;
                         }

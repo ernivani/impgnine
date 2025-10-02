@@ -1,9 +1,11 @@
 #include "UIComponentRenderer.hpp"
 #include "UIComponents.hpp"
+#include <iostream>
 
 namespace impgine {
 
-    void UIComponentRenderer::renderButton(UIRenderer& renderer, UIButton& button, const glm::vec2& windowContentPos) {
+    void UIComponentRenderer::renderButton(UIRenderer& renderer, UIButton& button, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
+        (void)verts; // Not using text in buttons yet
         glm::vec2 absolutePos = windowContentPos + button.position;
         glm::vec4 color = button.getCurrentColor();
 
@@ -21,7 +23,7 @@ namespace impgine {
         }
     }
 
-    void UIComponentRenderer::renderInputField(UIRenderer& renderer, UIInputField& input, const glm::vec2& windowContentPos) {
+    void UIComponentRenderer::renderInputField(UIRenderer& renderer, UIInputField& input, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
         glm::vec2 absolutePos = windowContentPos + input.position;
         glm::vec4 bgColor = input.getCurrentBackgroundColor();
 
@@ -32,29 +34,77 @@ namespace impgine {
         glm::vec2 textPos = absolutePos + glm::vec2(input.padding, (input.size.y - 16.0f) * 0.5f);
 
         if (!input.text.empty()) {
-            renderer.drawText(input.text, textPos, input.textColor);
+            // Draw selection highlight if there is any
+            if (input.hasSelection() && input.state == UIComponentState::Focused) {
+                size_t selStart = std::min(input.selectionStart, input.selectionEnd);
+                size_t selEnd = std::max(input.selectionStart, input.selectionEnd);
+
+                std::cout << "Drawing selection: selStart=" << selStart << " selEnd=" << selEnd
+                          << " hasSelection=" << input.hasSelection() << std::endl;
+
+                // Calculate actual text widths
+                float selectionX = textPos.x;
+                float selectionEndX = textPos.x;
+                auto textRenderer = renderer.getTextRenderer();
+                if (textRenderer) {
+                    float scale = 0.5f;
+                    for (size_t i = 0; i < input.text.length(); ++i) {
+                        const Character* ch = textRenderer->getCharacter(input.text[i]);
+                        if (ch) {
+                            float advance = (ch->advance >> 6) * scale;
+                            if (i < selStart) {
+                                selectionX += advance;
+                                selectionEndX += advance;
+                            } else if (i < selEnd) {
+                                selectionEndX += advance;
+                            }
+                        }
+                    }
+                }
+
+                float selectionWidth = selectionEndX - selectionX;
+                glm::vec2 selectionPos(selectionX, absolutePos.y + 4.0f);
+                glm::vec2 selectionSize(selectionWidth, input.size.y - 8.0f);
+                renderer.drawRect(selectionPos, selectionSize, input.selectionColor);
+            }
+
+            // Use renderText directly to avoid double NDC conversion
+            renderer.renderText(input.text, textPos, 0.5f, input.textColor, verts);
         } else if (!input.placeholder.empty()) {
-            renderer.drawText(input.placeholder, textPos, input.placeholderColor);
+            renderer.renderText(input.placeholder, textPos, 0.5f, input.placeholderColor, verts);
         }
 
-        // Draw cursor if focused
-        if (input.state == UIComponentState::Focused) {
-            float cursorX = textPos.x + input.cursorPosition * 10.0f; // Rough character width
+        // Draw cursor if focused (don't show cursor when there's a selection)
+        if (input.state == UIComponentState::Focused && !input.hasSelection()) {
+            // Calculate actual text width up to cursor position
+            float cursorX = textPos.x;
+            auto textRenderer = renderer.getTextRenderer();
+            if (textRenderer) {
+                float scale = 0.5f;
+                for (size_t i = 0; i < input.cursorPosition && i < input.text.length(); ++i) {
+                    const Character* ch = textRenderer->getCharacter(input.text[i]);
+                    if (ch) {
+                        cursorX += (ch->advance >> 6) * scale;
+                    }
+                }
+            }
+
             glm::vec2 cursorPos(cursorX, absolutePos.y + 4.0f);
             glm::vec2 cursorSize(2.0f, input.size.y - 8.0f);
             renderer.drawRect(cursorPos, cursorSize, input.cursorColor);
         }
     }
 
-    void UIComponentRenderer::renderLabel(UIRenderer& renderer, UILabel& label, const glm::vec2& windowContentPos) {
+    void UIComponentRenderer::renderLabel(UIRenderer& renderer, UILabel& label, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
         glm::vec2 absolutePos = windowContentPos + label.position;
 
         if (!label.text.empty()) {
-            renderer.drawText(label.text, absolutePos, label.textColor);
+            renderer.renderText(label.text, absolutePos, 0.4f, label.textColor, verts);
         }
     }
 
-    void UIComponentRenderer::renderCheckbox(UIRenderer& renderer, UICheckbox& checkbox, const glm::vec2& windowContentPos) {
+    void UIComponentRenderer::renderCheckbox(UIRenderer& renderer, UICheckbox& checkbox, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
+        (void)verts; // Not using text yet
         glm::vec2 absolutePos = windowContentPos + checkbox.position;
 
         // Draw checkbox box
@@ -75,7 +125,8 @@ namespace impgine {
         }
     }
 
-    void UIComponentRenderer::renderSlider(UIRenderer& renderer, UISlider& slider, const glm::vec2& windowContentPos) {
+    void UIComponentRenderer::renderSlider(UIRenderer& renderer, UISlider& slider, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
+        (void)verts; // Not using text yet
         glm::vec2 absolutePos = windowContentPos + slider.position;
 
         // Calculate track position (centered vertically)
@@ -99,24 +150,24 @@ namespace impgine {
         renderer.drawRect(handlePos, handleSize, slider.handleColor);
     }
 
-    void UIComponentRenderer::renderComponent(UIRenderer& renderer, UIComponent& component, const glm::vec2& windowContentPos) {
+    void UIComponentRenderer::renderComponent(UIRenderer& renderer, UIComponent& component, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
         if (!component.isVisible) return;
 
         switch (component.type) {
             case UIComponentType::Button:
-                renderButton(renderer, static_cast<UIButton&>(component), windowContentPos);
+                renderButton(renderer, static_cast<UIButton&>(component), windowContentPos, verts);
                 break;
             case UIComponentType::InputField:
-                renderInputField(renderer, static_cast<UIInputField&>(component), windowContentPos);
+                renderInputField(renderer, static_cast<UIInputField&>(component), windowContentPos, verts);
                 break;
             case UIComponentType::Label:
-                renderLabel(renderer, static_cast<UILabel&>(component), windowContentPos);
+                renderLabel(renderer, static_cast<UILabel&>(component), windowContentPos, verts);
                 break;
             case UIComponentType::Checkbox:
-                renderCheckbox(renderer, static_cast<UICheckbox&>(component), windowContentPos);
+                renderCheckbox(renderer, static_cast<UICheckbox&>(component), windowContentPos, verts);
                 break;
             case UIComponentType::Slider:
-                renderSlider(renderer, static_cast<UISlider&>(component), windowContentPos);
+                renderSlider(renderer, static_cast<UISlider&>(component), windowContentPos, verts);
                 break;
         }
     }

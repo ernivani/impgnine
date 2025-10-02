@@ -68,6 +68,8 @@ namespace impgine {
         std::string text { "" };
         std::string placeholder { "Enter text..." };
         size_t cursorPosition { 0 };
+        size_t selectionStart { 0 };
+        size_t selectionEnd { 0 };
         size_t maxLength { 256 };
 
         glm::vec4 backgroundColor { 0.25f, 0.25f, 0.3f, 1.0f };
@@ -75,6 +77,7 @@ namespace impgine {
         glm::vec4 textColor { 1.0f, 1.0f, 1.0f, 1.0f };
         glm::vec4 placeholderColor { 0.6f, 0.6f, 0.6f, 1.0f };
         glm::vec4 cursorColor { 1.0f, 1.0f, 1.0f, 1.0f };
+        glm::vec4 selectionColor { 0.4f, 0.6f, 0.9f, 0.5f };
 
         float padding { 8.0f };
 
@@ -82,26 +85,130 @@ namespace impgine {
             type = UIComponentType::InputField;
         }
 
+        bool hasSelection() const {
+            return selectionStart != selectionEnd;
+        }
+
+        void clearSelection() {
+            selectionStart = selectionEnd = cursorPosition;
+        }
+
+        std::string getSelectedText() const {
+            if (!hasSelection()) return "";
+            size_t start = std::min(selectionStart, selectionEnd);
+            size_t end = std::max(selectionStart, selectionEnd);
+            return text.substr(start, end - start);
+        }
+
+        void deleteSelection() {
+            if (!hasSelection()) return;
+            size_t start = std::min(selectionStart, selectionEnd);
+            size_t end = std::max(selectionStart, selectionEnd);
+            text.erase(start, end - start);
+            cursorPosition = start;
+            clearSelection();
+        }
+
         void insertChar(char c) {
+            if (hasSelection()) {
+                deleteSelection();
+            }
             if (text.length() < maxLength && cursorPosition <= text.length()) {
                 text.insert(cursorPosition, 1, c);
                 cursorPosition++;
+                clearSelection();
             }
         }
 
+        void insertText(const std::string& str) {
+            if (hasSelection()) {
+                deleteSelection();
+            }
+            for (char c : str) {
+                if (text.length() >= maxLength) break;
+                if (cursorPosition <= text.length()) {
+                    text.insert(cursorPosition, 1, c);
+                    cursorPosition++;
+                }
+            }
+            clearSelection();
+        }
+
         void deleteChar() {
-            if (cursorPosition > 0 && !text.empty()) {
+            if (hasSelection()) {
+                deleteSelection();
+            } else if (cursorPosition > 0 && !text.empty()) {
                 text.erase(cursorPosition - 1, 1);
                 cursorPosition--;
             }
         }
 
-        void moveCursorLeft() {
-            if (cursorPosition > 0) cursorPosition--;
+        void deleteForward() {
+            if (hasSelection()) {
+                deleteSelection();
+            } else if (cursorPosition < text.length()) {
+                text.erase(cursorPosition, 1);
+            }
         }
 
-        void moveCursorRight() {
-            if (cursorPosition < text.length()) cursorPosition++;
+        void moveCursorLeft(bool shiftHeld = false) {
+            if (!shiftHeld && hasSelection()) {
+                cursorPosition = std::min(selectionStart, selectionEnd);
+                clearSelection();
+            } else {
+                if (cursorPosition > 0) cursorPosition--;
+                if (shiftHeld) {
+                    selectionEnd = cursorPosition;
+                } else {
+                    clearSelection();
+                }
+            }
+        }
+
+        void moveCursorRight(bool shiftHeld = false) {
+            if (!shiftHeld && hasSelection()) {
+                cursorPosition = std::max(selectionStart, selectionEnd);
+                clearSelection();
+            } else {
+                if (cursorPosition < text.length()) cursorPosition++;
+                if (shiftHeld) {
+                    selectionEnd = cursorPosition;
+                } else {
+                    clearSelection();
+                }
+            }
+        }
+
+        void moveCursorToStart(bool shiftHeld = false) {
+            cursorPosition = 0;
+            if (shiftHeld) {
+                selectionEnd = cursorPosition;
+            } else {
+                clearSelection();
+            }
+        }
+
+        void moveCursorToEnd(bool shiftHeld = false) {
+            cursorPosition = text.length();
+            if (shiftHeld) {
+                selectionEnd = cursorPosition;
+            } else {
+                clearSelection();
+            }
+        }
+
+        void selectAll() {
+            selectionStart = 0;
+            selectionEnd = text.length();
+            cursorPosition = text.length();
+        }
+
+        // Get cursor position from pixel offset (approximate for now)
+        size_t getCursorFromPixelOffset(float pixelOffset) const {
+            // Simple approximation - will be improved when we have access to TextRenderer
+            float approxCharWidth = 10.0f;
+            size_t pos = static_cast<size_t>(std::max(0.0f, pixelOffset / approxCharWidth + 0.5f));
+            return std::min(pos, text.length());
         }
 
         glm::vec4 getCurrentBackgroundColor() const {
