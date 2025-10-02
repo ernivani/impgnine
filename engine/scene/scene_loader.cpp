@@ -40,7 +40,7 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
     std::vector<PendingEntity> entitiesToCreate;
     PendingEntity current;
     bool inEntityBlock = false;
-    enum class Section { None, Transform, MeshRenderer3D };
+    enum class Section { None, Transform, MeshRenderer };
     Section section = Section::None;
 
     auto trim = [](std::string s) {
@@ -69,7 +69,7 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
             }
 
             if (line == "Transform:") { section = Section::Transform; continue; }
-            if (line == "MeshRenderer3D:") { section = Section::MeshRenderer3D; continue; }
+            if (line == "MeshRenderer:") { section = Section::MeshRenderer; continue; }
 
             auto sep = line.find(':');
             if (sep == std::string::npos) continue;
@@ -107,7 +107,7 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
                 if (key == "position") current.position = parseObjVec3(value);
                 else if (key == "rotation") current.rotation = parseObjVec3(value);
                 else if (key == "scale") current.scale = parseObjVec3(value);
-            } else if (section == Section::MeshRenderer3D) {
+            } else if (section == Section::MeshRenderer) {
                 if (key == "modelPath") current.modelPath = value;
                 else if (key == "texturePath") current.texturePath = value;
                 else if (key == "color") current.color = parseObjVec3(value);
@@ -138,7 +138,7 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
         std::string fullModelPath = project.getFullPath(pe.modelPath);
         std::string fullTexturePath = project.getFullPath(pe.texturePath);
 
-        reg.addComponent<impgine::MeshRenderer3D>(e, impgine::MeshRenderer3D{ std::make_shared<impgine::Mesh>(fullModelPath), std::make_shared<impgine::Texture2D>(fullTexturePath), pe.color });
+        reg.addComponent<impgine::MeshRenderer>(e, impgine::MeshRenderer{ std::make_shared<impgine::Mesh>(fullModelPath), std::make_shared<impgine::Texture2D>(fullTexturePath), pe.color });
     }
 }
 
@@ -220,8 +220,8 @@ bool SceneLoader::saveScene(const std::string& scenePath, const ProjectSettings&
         } catch (...) {}
 
         try {
-            const auto& mr = registry.getComponent<MeshRenderer3D>(e);
-            file << "MeshRenderer3D:\n";
+            const auto& mr = registry.getComponent<MeshRenderer>(e);
+            file << "MeshRenderer:\n";
             // Persist paths relative to project root
             std::string relModel = project.toRelativePath(mr.mesh->modelPath);
             std::string relTex = mr.texture ? project.toRelativePath(mr.texture->texturePath) : "";

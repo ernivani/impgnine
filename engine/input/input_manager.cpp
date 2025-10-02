@@ -369,6 +369,8 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
                             // Focus the input field
                             auto input = std::dynamic_pointer_cast<UIInputField>(comp);
                             if (input) {
+                                bool wasAlreadyFocused = (comp->state == UIComponentState::Focused);
+
                                 // Unfocus all other inputs
                                 for (auto& w : uiWindows) {
                                     for (auto& c : w.components) {
@@ -379,12 +381,17 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
                                 }
                                 comp->state = UIComponentState::Focused;
 
-                                // Set cursor position based on click location
-                                float relativeX = xpos - (absolutePos.x + input->padding);
-                                size_t clickPos = input->getCursorFromPixelOffset(relativeX);
-                                input->cursorPosition = clickPos;
-                                input->selectionStart = clickPos;
-                                input->selectionEnd = clickPos;
+                                // If field wasn't focused and has text, select all
+                                if (!wasAlreadyFocused && !input->text.empty()) {
+                                    input->selectAll();
+                                } else {
+                                    // Set cursor position based on click location
+                                    float relativeX = xpos - (absolutePos.x + input->padding);
+                                    size_t clickPos = input->getCursorFromPixelOffset(relativeX);
+                                    input->cursorPosition = clickPos;
+                                    input->selectionStart = clickPos;
+                                    input->selectionEnd = clickPos;
+                                }
                             }
                             break;
                         }

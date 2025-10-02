@@ -51,7 +51,7 @@ namespace impgine {
     };
 
 
-    struct MeshRenderer3D {
+    struct MeshRenderer {
         std::shared_ptr<Mesh> mesh;
         std::shared_ptr<Texture2D> texture;
         glm::vec3 color{ 1.0f, 1.0f, 1.0f };

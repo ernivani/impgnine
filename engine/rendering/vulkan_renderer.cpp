@@ -178,7 +178,7 @@ void recordCommandBuffer(
     const auto entityList = registry->getEntities();
     for (const Entity e : entityList) {
         auto &transform = registry->getComponent<impgine::Transform>(e);
-        auto &meshRenderer = registry->getComponent<impgine::MeshRenderer3D>(e);
+        auto &meshRenderer = registry->getComponent<impgine::MeshRenderer>(e);
 
         // Get the mesh GPU resources
         auto meshIt = meshCache.find(meshRenderer.mesh->modelPath);
