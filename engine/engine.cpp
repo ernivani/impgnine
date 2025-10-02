@@ -37,6 +37,11 @@ Engine::Engine() {
     glfwSetKeyCallback(window->getGLFWWindow(), keyCallback);
     glfwSetWindowCloseCallback(window->getGLFWWindow(), windowCloseCallback);
 
+    // Set up camera modification callback
+    camera.setOnModifiedCallback([this]() {
+        markSceneModified();
+    });
+
     initVulkan();
 }
 

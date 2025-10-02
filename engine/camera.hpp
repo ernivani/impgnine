@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <functional>
 
 namespace impgine {
 
@@ -53,6 +54,11 @@ namespace impgine {
             return rotation;
         }
 
+        // Set callback to be called when camera is modified
+        void setOnModifiedCallback(std::function<void()> callback) {
+            onModified = callback;
+        }
+
         private: glm::mat4 projectionMatrix {
             1.0f
         };
@@ -62,10 +68,13 @@ namespace impgine {
         glm::mat4 inverseViewMatrix {
             1.0f
         };
-        
+
         // Camera state
         glm::vec3 position{3.0f, 1.5f, 3.0f};  // Initial position
         glm::vec3 rotation{0.0f, -2.356f, 0.0f}; // Pitch, Yaw, Roll (yaw = -135° to look at model)
+
+        // Callback when camera is modified
+        std::function<void()> onModified;
     };
 
 } // namespace impgine
