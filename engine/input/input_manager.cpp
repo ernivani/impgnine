@@ -7,6 +7,19 @@
 
 namespace impgine {
 
+namespace {
+    // Blur an input: if empty, display 0; always defocus
+    inline void blurInput(std::shared_ptr<UIInputField>& input) {
+        if (!input) return;
+        if (input->text.empty()) {
+            input->text = "0"; // show 0 only on blur
+            input->cursorPosition = input->text.length();
+            input->clearSelection();
+        }
+        input->state = UIComponentState::Normal;
+    }
+}
+
 InputManager::InputManager(Window* window, Camera* camera)
     : window(window), camera(camera), lastMouseX(400.0), lastMouseY(300.0) {
 }
@@ -86,11 +99,14 @@ void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float 
         if (!window.isVisible) continue;
 
         glm::vec2 contentPos = window.getContentPosition();
+        glm::vec2 contentSize = window.getContentSize();
 
         for (auto& comp : window.components) {
             if (!comp->isEnabled || !comp->isVisible) continue;
 
-            glm::vec2 absolutePos = contentPos + comp->position;
+            // Flip Y position to match rendering
+            float flippedY = contentSize.y - comp->position.y - comp->size.y;
+            glm::vec2 absolutePos = glm::vec2(contentPos.x + comp->position.x, contentPos.y + flippedY);
 
             if (mouseX >= absolutePos.x && mouseX <= absolutePos.x + comp->size.x &&
                 mouseY >= absolutePos.y && mouseY <= absolutePos.y + comp->size.y) {
@@ -128,10 +144,12 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
             if (!uiWindow.isVisible) continue;
 
             glm::vec2 contentPos = uiWindow.getContentPosition();
+            glm::vec2 contentSize = uiWindow.getContentSize();
 
             for (auto& comp : uiWindow.components) {
                 if (comp == draggedSlider) {
-                    glm::vec2 absolutePos = contentPos + comp->position;
+                    float flippedY = contentSize.y - comp->position.y - comp->size.y;
+                    glm::vec2 absolutePos = glm::vec2(contentPos.x + comp->position.x, contentPos.y + flippedY);
                     float relativeX = mouseX - absolutePos.x;
                     float normalizedValue = glm::clamp(relativeX / comp->size.x, 0.0f, 1.0f);
                     float newValue = draggedSlider->minValue + normalizedValue * (draggedSlider->maxValue - draggedSlider->minValue);
@@ -300,12 +318,49 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
                     } else if (key == GLFW_KEY_END) {
                         input->moveCursorToEnd(shiftHeld);
                     } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
-                        // Commit on Enter
-                        if (input->onCommit) input->onCommit(input->text);
-                        comp->state = UIComponentState::Normal;
+                        // Defocus; if empty, display 0
+                        blurInput(input);
                     } else if (key == GLFW_KEY_ESCAPE) {
-                        // Cancel focus on Escape
-                        comp->state = UIComponentState::Normal;
+                        // Defocus; if empty, display 0
+                        blurInput(input);
+                    } else if (key == GLFW_KEY_TAB) {
+                        // Move to next/previous input field
+                        blurInput(input);
+
+                        // Find all input fields in order
+                        std::vector<std::shared_ptr<UIInputField>> allInputs;
+                        for (auto& w : uiWindows) {
+                            if (!w.isVisible) continue;
+                            for (auto& c : w.components) {
+                                if (c->type == UIComponentType::InputField && c->isEnabled && c->isVisible) {
+                                    auto inp = std::dynamic_pointer_cast<UIInputField>(c);
+                                    if (inp) allInputs.push_back(inp);
+                                }
+                            }
+                        }
+
+                        // Find current input index
+                        int currentIdx = -1;
+                        for (size_t i = 0; i < allInputs.size(); ++i) {
+                            if (allInputs[i] == input) {
+                                currentIdx = static_cast<int>(i);
+                                break;
+                            }
+                        }
+
+                        // Move to next or previous
+                        if (currentIdx >= 0 && !allInputs.empty()) {
+                            int nextIdx;
+                            if (shiftHeld) {
+                                // Shift+Tab: go to previous field
+                                nextIdx = (currentIdx - 1 + static_cast<int>(allInputs.size())) % static_cast<int>(allInputs.size());
+                            } else {
+                                // Tab: go to next field
+                                nextIdx = (currentIdx + 1) % static_cast<int>(allInputs.size());
+                            }
+                            allInputs[nextIdx]->state = UIComponentState::Focused;
+                            allInputs[nextIdx]->selectAll();
+                        }
                     }
                 }
                 return;
@@ -336,11 +391,14 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
             if (!uiWindow.isVisible) continue;
 
             glm::vec2 contentPos = uiWindow.getContentPosition();
+            glm::vec2 contentSize = uiWindow.getContentSize();
 
             for (auto& comp : uiWindow.components) {
                 if (!comp->isEnabled || !comp->isVisible) continue;
 
-                glm::vec2 absolutePos = contentPos + comp->position;
+                // Flip Y position to match rendering
+                float flippedY = contentSize.y - comp->position.y - comp->size.y;
+                glm::vec2 absolutePos = glm::vec2(contentPos.x + comp->position.x, contentPos.y + flippedY);
 
                 if (xpos >= absolutePos.x && xpos <= absolutePos.x + comp->size.x &&
                     ypos >= absolutePos.y && ypos <= absolutePos.y + comp->size.y) {
@@ -374,7 +432,8 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
                                 for (auto& w : uiWindows) {
                                     for (auto& c : w.components) {
                                         if (c->type == UIComponentType::InputField && c != comp) {
-                                            c->state = UIComponentState::Normal;
+                                            auto other = std::dynamic_pointer_cast<UIInputField>(c);
+                                            blurInput(other);
                                         }
                                     }
                                 }
@@ -419,6 +478,15 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
 
         // If not clicking a component, handle other UI clicks (like hierarchy selection)
         if (!clickedComponent && uiRenderer) {
+            // Blur any focused inputs when clicking empty UI space
+            for (auto& w : uiWindows) {
+                for (auto& c : w.components) {
+                    if (c->type == UIComponentType::InputField && c->state == UIComponentState::Focused) {
+                        auto input = std::dynamic_pointer_cast<UIInputField>(c);
+                        blurInput(input);
+                    }
+                }
+            }
             uiRenderer->handleMouseClick(xpos, ypos, uiWindows);
         }
     }

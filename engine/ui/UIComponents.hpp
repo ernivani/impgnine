@@ -66,7 +66,6 @@ namespace impgine {
 
     struct UIInputField : public UIComponent {
         std::string text { "" };
-        std::string placeholder { "Enter text..." };
         std::function<void(const std::string&)> onCommit { nullptr };
         size_t cursorPosition { 0 };
         size_t selectionStart { 0 };
@@ -92,6 +91,12 @@ namespace impgine {
             type = UIComponentType::InputField;
         }
 
+        inline void notifyCommit() {
+            if (onCommit) {
+                onCommit(text.empty() ? std::string("0") : text);
+            }
+        }
+
         bool hasSelection() const {
             return selectionStart != selectionEnd;
         }
@@ -114,6 +119,7 @@ namespace impgine {
             text.erase(start, end - start);
             cursorPosition = start;
             clearSelection();
+            notifyCommit();
         }
 
         void insertChar(char c) {
@@ -124,6 +130,7 @@ namespace impgine {
                 text.insert(cursorPosition, 1, c);
                 cursorPosition++;
                 clearSelection();
+                notifyCommit();
             }
         }
 
@@ -139,6 +146,7 @@ namespace impgine {
                 }
             }
             clearSelection();
+            notifyCommit();
         }
 
         void deleteChar() {
@@ -147,6 +155,7 @@ namespace impgine {
             } else if (cursorPosition > 0 && !text.empty()) {
                 text.erase(cursorPosition - 1, 1);
                 cursorPosition--;
+                notifyCommit();
             }
         }
 
@@ -155,6 +164,7 @@ namespace impgine {
                 deleteSelection();
             } else if (cursorPosition < text.length()) {
                 text.erase(cursorPosition, 1);
+                notifyCommit();
             }
         }
 
@@ -232,6 +242,7 @@ namespace impgine {
 
         UILabel() {
             type = UIComponentType::Label;
+            isEnabled = false;  // Labels don't need hover/click interaction
         }
     };
 

@@ -356,6 +356,15 @@ void Engine::rebuildInspectorUI() {
             inspectorWindow.addComponent(lbl);
         };
 
+        // Calculate responsive layout for transform fields
+        float contentWidth = inspectorWindow.getContentSize().x;
+        float labelWidth = 80.0f;
+        float axisLabelWidth = 15.0f;
+        float fieldSpacing = 5.0f;
+        float availableWidth = contentWidth - labelWidth - 40.0f; // 40 for padding
+        float fieldWidth = (availableWidth - (2 * axisLabelWidth) - (2 * fieldSpacing)) / 3.0f;
+        fieldWidth = glm::max(fieldWidth, 50.0f); // Minimum field width
+
         auto makeAxisLabel = [&](const char* text, float xpos, float ypos) {
             auto lbl = std::make_shared<UILabel>();
             lbl->text = text;
@@ -367,7 +376,7 @@ void Engine::rebuildInspectorUI() {
         auto makeField = [&](float xpos, float ypos, float value, std::function<void(float)> setter) {
             auto field = std::make_shared<UIInputField>();
             field->position = glm::vec2(xpos, ypos);
-            field->size = glm::vec2(75.0f, 28.0f);
+            field->size = glm::vec2(fieldWidth, 28.0f);
             field->backgroundColor = glm::vec4(0.18f, 0.18f, 0.2f, 1.0f);
             field->focusedColor = glm::vec4(0.22f, 0.22f, 0.25f, 1.0f);
             field->hoverColor = glm::vec4(0.2f, 0.2f, 0.22f, 1.0f);
@@ -396,34 +405,43 @@ void Engine::rebuildInspectorUI() {
         // Row: Position
         {
             float rowY = y; makeLabel("Position", rowY); y += 38.0f;
-            makeAxisLabel("X", 100.0f, rowY);
-            makeField(118.0f, rowY, transform.position.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.x = v; });
-            makeAxisLabel("Y", 198.0f, rowY);
-            makeField(216.0f, rowY, transform.position.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.y = v; });
-            makeAxisLabel("Z", 296.0f, rowY);
-            makeField(314.0f, rowY, transform.position.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.z = v; });
+            float xStart = labelWidth;
+            makeAxisLabel("X", xStart, rowY);
+            makeField(xStart + axisLabelWidth, rowY, transform.position.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.x = v; });
+            float xOffset2 = xStart + axisLabelWidth + fieldWidth + fieldSpacing;
+            makeAxisLabel("Y", xOffset2, rowY);
+            makeField(xOffset2 + axisLabelWidth, rowY, transform.position.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.y = v; });
+            float xOffset3 = xOffset2 + axisLabelWidth + fieldWidth + fieldSpacing;
+            makeAxisLabel("Z", xOffset3, rowY);
+            makeField(xOffset3 + axisLabelWidth, rowY, transform.position.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.z = v; });
         }
 
         // Row: Rotation
         {
             float rowY = y; makeLabel("Rotation", rowY); y += 38.0f;
-            makeAxisLabel("X", 100.0f, rowY);
-            makeField(118.0f, rowY, transform.rotation.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.x = v; });
-            makeAxisLabel("Y", 198.0f, rowY);
-            makeField(216.0f, rowY, transform.rotation.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.y = v; });
-            makeAxisLabel("Z", 296.0f, rowY);
-            makeField(314.0f, rowY, transform.rotation.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.z = v; });
+            float xStart = labelWidth;
+            makeAxisLabel("X", xStart, rowY);
+            makeField(xStart + axisLabelWidth, rowY, transform.rotation.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.x = v; });
+            float xOffset2 = xStart + axisLabelWidth + fieldWidth + fieldSpacing;
+            makeAxisLabel("Y", xOffset2, rowY);
+            makeField(xOffset2 + axisLabelWidth, rowY, transform.rotation.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.y = v; });
+            float xOffset3 = xOffset2 + axisLabelWidth + fieldWidth + fieldSpacing;
+            makeAxisLabel("Z", xOffset3, rowY);
+            makeField(xOffset3 + axisLabelWidth, rowY, transform.rotation.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.z = v; });
         }
 
         // Row: Scale
         {
             float rowY = y; makeLabel("Scale", rowY); y += 38.0f;
-            makeAxisLabel("X", 100.0f, rowY);
-            makeField(118.0f, rowY, transform.scale.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.x = v; });
-            makeAxisLabel("Y", 198.0f, rowY);
-            makeField(216.0f, rowY, transform.scale.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.y = v; });
-            makeAxisLabel("Z", 296.0f, rowY);
-            makeField(314.0f, rowY, transform.scale.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.z = v; });
+            float xStart = labelWidth;
+            makeAxisLabel("X", xStart, rowY);
+            makeField(xStart + axisLabelWidth, rowY, transform.scale.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.x = v; });
+            float xOffset2 = xStart + axisLabelWidth + fieldWidth + fieldSpacing;
+            makeAxisLabel("Y", xOffset2, rowY);
+            makeField(xOffset2 + axisLabelWidth, rowY, transform.scale.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.y = v; });
+            float xOffset3 = xOffset2 + axisLabelWidth + fieldWidth + fieldSpacing;
+            makeAxisLabel("Z", xOffset3, rowY);
+            makeField(xOffset3 + axisLabelWidth, rowY, transform.scale.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.z = v; });
         }
     } catch (...) {
         auto msg = std::make_shared<UILabel>();

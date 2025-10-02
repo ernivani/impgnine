@@ -61,7 +61,8 @@ namespace impgine {
         }
 
         glm::vec2 getContentPosition() const {
-            return glm::vec2(position.x + borderWidth, position.y + borderWidth + titleBarHeight);
+            // Content area is below the title bar (title bar is at top, content at bottom)
+            return glm::vec2(position.x + borderWidth, position.y + borderWidth);
         }
 
         glm::vec2 getContentSize() const {

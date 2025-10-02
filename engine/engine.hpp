@@ -147,6 +147,7 @@ namespace impgine {
         // UI
         std::unique_ptr<UIRenderer> uiRenderer;
         std::vector<UIWindow> uiWindows;
+        glm::vec2 lastInspectorSize { 0.0f, 0.0f };
     };
 
 } // namespace impgine

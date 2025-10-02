@@ -156,19 +156,19 @@ namespace impgine {
                 addQuad({ p.x + s.x - w.borderWidth, p.y }, { w.borderWidth, s.y }, w.borderColor);  // Right
             }
 
-            // Title bar at top of window
-            glm::vec2 titleBarPos = { p.x + w.borderWidth, p.y + w.borderWidth };
+            // Title bar at top of window (highest Y value)
+            glm::vec2 titleBarPos = { p.x + w.borderWidth, p.y + s.y - w.borderWidth - w.titleBarHeight };
             glm::vec2 titleBarSize = { s.x - 2.0f * w.borderWidth, w.titleBarHeight };
             if (w.titleBarHeight > 0.0f) {
                 addQuad(titleBarPos, titleBarSize, w.titleBarColor);
 
                 // Render title bar text
-                glm::vec2 titleTextPos = { p.x + w.borderWidth + 10.0f, p.y + w.borderWidth + 8.0f };
+                glm::vec2 titleTextPos = { p.x + w.borderWidth + 10.0f, p.y + s.y - w.borderWidth - w.titleBarHeight + 8.0f };
                 renderText(w.title, titleTextPos, 0.4f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
             }
 
-            // Draw content area background (below title bar)
-            glm::vec2 contentPos = { p.x + w.borderWidth, p.y + w.borderWidth + w.titleBarHeight };
+            // Draw content area background (below title bar, which means lower Y)
+            glm::vec2 contentPos = { p.x + w.borderWidth, p.y + w.borderWidth };
             glm::vec2 contentSize = { s.x - 2.0f * w.borderWidth, s.y - w.titleBarHeight - 2.0f * w.borderWidth };
             addQuad(contentPos, contentSize, w.backgroundColor);
 
@@ -179,9 +179,18 @@ namespace impgine {
             // First collect vertices where text should be inserted
             size_t textInsertPoint = verts.size();
 
-            // Render components (toNDC handles Y-flip from top-left to bottom-left)
+            // Render components with Y-flipped positions
+            // Components are positioned with Y=0 at top, but rendering expects Y=0 at bottom
+            // So we need to flip: componentY=0 → contentTop, componentY=contentSize.y → contentBottom
             for (const auto& comp : w.components) {
-                UIComponentRenderer::renderComponent(*this, *comp, contentPos, verts);
+                glm::vec2 originalPos = comp->position;
+                // Flip Y: move from "top-relative" to "bottom-relative"
+                comp->position.y = contentSize.y - comp->position.y - comp->size.y;
+                glm::vec2 adjustedContentPos = contentPos;
+
+                UIComponentRenderer::renderComponent(*this, *comp, adjustedContentPos, verts);
+
+                comp->position = originalPos;
             }
 
             // Now insert the rects (currentVertices) at the textInsertPoint

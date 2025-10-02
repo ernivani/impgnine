@@ -109,8 +109,6 @@ namespace impgine {
 
             std::string visible = input.text.substr(input.scrollStart);
             renderer.renderText(visible, textPos, 0.5f, input.textColor, verts);
-        } else if (!input.placeholder.empty()) {
-            renderer.renderText(input.placeholder, textPos, 0.5f, input.placeholderColor, verts);
         }
 
         // Draw cursor if focused (don't show cursor when there's a selection)

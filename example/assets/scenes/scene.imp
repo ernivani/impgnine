@@ -1,7 +1,7 @@
 %IMP 1.0
 Camera:
-  position: {x: -3.3227, y: -1.77481, z: -0.8737}
-  rotation: {x: -0.206679, y: -4.7729, z: 0}
+  position: {x: -9.84746, y: 14.405, z: -4.62833}
+  rotation: {x: -0.548452, y: -3.75013, z: 0}
 --- !imp!Entity
 name: VikingRoom
 Transform:
@@ -17,7 +17,7 @@ name: Airplane
 Transform:
   position: {x: 5, y: 0, z: 0}
   rotation: {x: 1, y: 0, z: 0}
-  scale: {x: 1, y: 1, z: 1}
+  scale: {x: 10, y: 10, z: 10}
 MeshRenderer:
   modelPath: assets/models/piper_pa18.obj
   texturePath: assets/textures/piper_diffuse.jpg
