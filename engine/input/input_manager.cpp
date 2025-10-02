@@ -86,14 +86,11 @@ void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float 
         if (!window.isVisible) continue;
 
         glm::vec2 contentPos = window.getContentPosition();
-        glm::vec2 contentSize = window.getContentSize();
 
         for (auto& comp : window.components) {
             if (!comp->isEnabled || !comp->isVisible) continue;
 
-            // Flip Y coordinate to match rendering (components rendered from bottom)
-            float flippedY = contentSize.y - comp->position.y - comp->size.y;
-            glm::vec2 absolutePos = glm::vec2(contentPos.x + comp->position.x, contentPos.y + flippedY);
+            glm::vec2 absolutePos = contentPos + comp->position;
 
             if (mouseX >= absolutePos.x && mouseX <= absolutePos.x + comp->size.x &&
                 mouseY >= absolutePos.y && mouseY <= absolutePos.y + comp->size.y) {
@@ -131,12 +128,10 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
             if (!uiWindow.isVisible) continue;
 
             glm::vec2 contentPos = uiWindow.getContentPosition();
-            glm::vec2 contentSize = uiWindow.getContentSize();
 
             for (auto& comp : uiWindow.components) {
                 if (comp == draggedSlider) {
-                    float flippedY = contentSize.y - comp->position.y - comp->size.y;
-                    glm::vec2 absolutePos = glm::vec2(contentPos.x + comp->position.x, contentPos.y + flippedY);
+                    glm::vec2 absolutePos = contentPos + comp->position;
                     float relativeX = mouseX - absolutePos.x;
                     float normalizedValue = glm::clamp(relativeX / comp->size.x, 0.0f, 1.0f);
                     float newValue = draggedSlider->minValue + normalizedValue * (draggedSlider->maxValue - draggedSlider->minValue);
@@ -342,14 +337,11 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
             if (!uiWindow.isVisible) continue;
 
             glm::vec2 contentPos = uiWindow.getContentPosition();
-            glm::vec2 contentSize = uiWindow.getContentSize();
 
             for (auto& comp : uiWindow.components) {
                 if (!comp->isEnabled || !comp->isVisible) continue;
 
-                // Flip Y coordinate to match rendering
-                float flippedY = contentSize.y - comp->position.y - comp->size.y;
-                glm::vec2 absolutePos = glm::vec2(contentPos.x + comp->position.x, contentPos.y + flippedY);
+                glm::vec2 absolutePos = contentPos + comp->position;
 
                 if (xpos >= absolutePos.x && xpos <= absolutePos.x + comp->size.x &&
                     ypos >= absolutePos.y && ypos <= absolutePos.y + comp->size.y) {

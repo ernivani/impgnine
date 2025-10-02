@@ -112,9 +112,15 @@ namespace impgine {
         verts.reserve(windows.size() * 30);  // More vertices for detailed UI
 
         auto toNDC = [&](glm::vec2 px) {
+            // Layout uses top-left origin (Y=0 at top, increases downward)
+            // NDC needs bottom-left origin (Y=-1 at bottom, Y=+1 at top)
+            // So we flip: screenY=0 → NDC Y=+1, screenY=height → NDC Y=-1
+            float height = static_cast<float>(swapChain.getSwapChainExtent().height);
+            float flippedY = height - px.y;
+
             float nx = (px.x / static_cast<float>(swapChain.getSwapChainExtent().width)) * 2.0f - 1.0f;
-            float ny = (px.y / static_cast<float>(swapChain.getSwapChainExtent().height)) * 2.0f - 1.0f;
-            return glm::vec2(nx, -ny);
+            float ny = (flippedY / height) * 2.0f - 1.0f;
+            return glm::vec2(nx, ny);
         };
 
         auto addQuad = [&](glm::vec2 p, glm::vec2 s, glm::vec4 col) {
@@ -139,7 +145,7 @@ namespace impgine {
 
             // Bottom panel is positioned at Y=0 in layout but should render at screen bottom
             if (w.dockPosition == DockPosition::Bottom) {
-                p.y = static_cast<float>(swapChain.getSwapChainExtent().height) - s.y;
+                p.y = 0;
             }
 
             // Draw border
@@ -150,7 +156,7 @@ namespace impgine {
                 addQuad({ p.x + s.x - w.borderWidth, p.y }, { w.borderWidth, s.y }, w.borderColor);  // Right
             }
 
-            // Draw title bar
+            // Title bar at top of window
             glm::vec2 titleBarPos = { p.x + w.borderWidth, p.y + w.borderWidth };
             glm::vec2 titleBarSize = { s.x - 2.0f * w.borderWidth, w.titleBarHeight };
             if (w.titleBarHeight > 0.0f) {
@@ -161,7 +167,7 @@ namespace impgine {
                 renderText(w.title, titleTextPos, 0.4f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
             }
 
-            // Draw content area background
+            // Draw content area background (below title bar)
             glm::vec2 contentPos = { p.x + w.borderWidth, p.y + w.borderWidth + w.titleBarHeight };
             glm::vec2 contentSize = { s.x - 2.0f * w.borderWidth, s.y - w.titleBarHeight - 2.0f * w.borderWidth };
             addQuad(contentPos, contentSize, w.backgroundColor);
@@ -173,17 +179,9 @@ namespace impgine {
             // First collect vertices where text should be inserted
             size_t textInsertPoint = verts.size();
 
-            // Render components with Y-flipped positions
-            // Components use Y from top (Y=0 at top), but rendering expects Y from bottom
+            // Render components (toNDC handles Y-flip from top-left to bottom-left)
             for (const auto& comp : w.components) {
-                // Flip component Y position relative to content area
-                glm::vec2 originalPos = comp->position;
-                comp->position.y = contentSize.y - comp->position.y - comp->size.y;
-
                 UIComponentRenderer::renderComponent(*this, *comp, contentPos, verts);
-
-                // Restore original position
-                comp->position = originalPos;
             }
 
             // Now insert the rects (currentVertices) at the textInsertPoint
@@ -232,9 +230,15 @@ namespace impgine {
         if (!textRenderer) return;
 
         auto toNDC = [&](glm::vec2 px) {
+            // Layout uses top-left origin (Y=0 at top, increases downward)
+            // NDC needs bottom-left origin (Y=-1 at bottom, Y=+1 at top)
+            // So we flip: screenY=0 → NDC Y=+1, screenY=height → NDC Y=-1
+            float height = static_cast<float>(swapChain.getSwapChainExtent().height);
+            float flippedY = height - px.y;
+
             float nx = (px.x / static_cast<float>(swapChain.getSwapChainExtent().width)) * 2.0f - 1.0f;
-            float ny = (px.y / static_cast<float>(swapChain.getSwapChainExtent().height)) * 2.0f - 1.0f;
-            return glm::vec2(nx, -ny);
+            float ny = (flippedY / height) * 2.0f - 1.0f;
+            return glm::vec2(nx, ny);
         };
 
         float xpos = position.x;

@@ -61,11 +61,11 @@ namespace impgine {
         }
 
         glm::vec2 getContentPosition() const {
-            return glm::vec2(position.x, position.y + titleBarHeight);
+            return glm::vec2(position.x + borderWidth, position.y + borderWidth + titleBarHeight);
         }
 
         glm::vec2 getContentSize() const {
-            return glm::vec2(size.x, size.y - titleBarHeight);
+            return glm::vec2(size.x - 2.0f * borderWidth, size.y - titleBarHeight - 2.0f * borderWidth);
         }
 
         // UI components
