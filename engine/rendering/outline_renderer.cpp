@@ -806,8 +806,14 @@ void renderOutlineMask(
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, resources.outlinePipeline);
 
-    // Render the selected entity
+    // Render the selected entity (only if active)
     try {
+        // Skip if entity is not active in hierarchy
+        if (!registry->isActiveInHierarchy(selectedEntity)) {
+            vkCmdEndRenderPass(commandBuffer);
+            return;
+        }
+
         auto& meshRenderer = registry->getComponent<impgine::MeshRenderer>(selectedEntity);
 
         auto meshIt = meshCache.find(meshRenderer.mesh->modelPath);

@@ -1,10 +1,10 @@
 %IMP 1.0
 Camera:
-  position: {x: 36.6149, y: -11.7928, z: 11.9046}
-  rotation: {x: 0.401492, y: -1.16208, z: 0}
+  position: {x: 37.1539, y: -12.1109, z: 12.1203}
+  rotation: {x: 0.331906, y: -1.03772, z: 0}
 --- !imp!Entity
 name: VikingRoom
-active: true
+active: false
 Transform:
   position: {x: 1, y: 0, z: 0}
   rotation: {x: 0, y: 0, z: 0}

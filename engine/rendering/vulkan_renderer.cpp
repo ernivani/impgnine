@@ -187,6 +187,11 @@ void recordCommandBuffer(
 
     const auto entityList = registry->getEntities();
     for (const Entity e : entityList) {
+        // Skip inactive entities
+        if (!registry->isActiveInHierarchy(e)) {
+            continue;
+        }
+
         auto &meshRenderer = registry->getComponent<impgine::MeshRenderer>(e);
 
         // Get the mesh GPU resources

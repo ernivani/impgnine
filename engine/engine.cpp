@@ -311,8 +311,31 @@ void Engine::rebuildInspectorUI() {
 
     float y = 10.0f;
 
-    // Header: Entity name (editable)
+    // Header: Active checkbox and Entity name
     {
+        // Active checkbox
+        bool isActive = true;
+        try {
+            const auto& active = registry.getComponent<Active>(selected);
+            isActive = active.isActiveSelf;
+        } catch (...) {}
+
+        auto activeCheckbox = std::make_shared<UICheckbox>();
+        activeCheckbox->isChecked = isActive;
+        activeCheckbox->label = "";  // No label, just checkbox
+        activeCheckbox->position = glm::vec2(10.0f, y + 6.0f);
+        activeCheckbox->size = glm::vec2(20.0f, 20.0f);
+        activeCheckbox->boxSize = 16.0f;
+        activeCheckbox->boxColor = glm::vec4(0.18f, 0.18f, 0.2f, 1.0f);
+        activeCheckbox->checkColor = glm::vec4(0.3f, 0.7f, 0.3f, 1.0f);
+        activeCheckbox->onToggle = [this, selected](bool checked) {
+            auto& reg = ECSRegistry::getRegistry();
+            reg.setActive(selected, checked);
+            markSceneModified();
+        };
+        inspectorWindow.addComponent(activeCheckbox);
+
+        // Entity name (editable)
         std::string name = "Entity " + std::to_string(selected);
         try {
             const auto& tag = registry.getComponent<Tag>(selected);
@@ -321,8 +344,8 @@ void Engine::rebuildInspectorUI() {
 
         auto nameField = std::make_shared<UIInputField>();
         nameField->text = name;
-        nameField->position = glm::vec2(10.0f, y);
-        nameField->size = glm::vec2(inspectorWindow.getContentSize().x - 20.0f, 32.0f);
+        nameField->position = glm::vec2(35.0f, y);
+        nameField->size = glm::vec2(inspectorWindow.getContentSize().x - 45.0f, 32.0f);
         nameField->backgroundColor = glm::vec4(0.18f, 0.18f, 0.2f, 1.0f);
         nameField->focusedColor = glm::vec4(0.22f, 0.22f, 0.25f, 1.0f);
         nameField->hoverColor = glm::vec4(0.2f, 0.2f, 0.22f, 1.0f);
