@@ -39,10 +39,6 @@ namespace impgine {
                 size_t selStart = std::min(input.selectionStart, input.selectionEnd);
                 size_t selEnd = std::max(input.selectionStart, input.selectionEnd);
 
-                std::cout << "Drawing selection: selStart=" << selStart << " selEnd=" << selEnd
-                          << " hasSelection=" << input.hasSelection() << std::endl;
-
-                // Calculate actual text widths
                 float selectionX = textPos.x;
                 float selectionEndX = textPos.x;
                 auto textRenderer = renderer.getTextRenderer();

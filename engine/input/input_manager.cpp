@@ -69,7 +69,7 @@ void InputManager::handleMouseMovement() {
     camera->rotatePitch(static_cast<float>(yoffset * sensitivity));
 }
 
-void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float mouseX, float mouseY, int fbWidth, int fbHeight) {
+void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float mouseX, float mouseY) {
     // Reset all component states to normal first
     for (auto& window : uiWindows) {
         for (auto& comp : window.components) {
@@ -141,7 +141,7 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
     }
 
     // Update component hover states
-    updateComponentHover(uiWindows, mouseX, mouseY, fbWidth, fbHeight);
+    updateComponentHover(uiWindows, mouseX, mouseY);
 
     // Check if mouse is over any UI panel
     bool mouseOverUI = uiRenderer->getLayout().isPointOverUI(mouseX, mouseY, uiWindows);
@@ -197,13 +197,6 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
     bool shiftHeld = (mods & GLFW_MOD_SHIFT) != 0;
     bool altHeld = (mods & GLFW_MOD_ALT) != 0;    // Option key on Mac
 
-    // Debug: print ALL keys with modifiers, and also plain 'A'
-    if (cmdHeld || ctrlHeld || key == GLFW_KEY_A) {
-        std::cout << "keyCallback: key=" << key << " char='" << (char)key << "' (GLFW_KEY_A=" << GLFW_KEY_A
-                  << " GLFW_KEY_Q=" << GLFW_KEY_Q << ") ctrl=" << ctrlHeld << " cmd=" << cmdHeld
-                  << " shift=" << shiftHeld << " mods=" << mods << std::endl;
-    }
-
     // On Mac, use Cmd for shortcuts; on other platforms, use Ctrl
     bool modifierHeld = cmdHeld || ctrlHeld;
 
@@ -219,7 +212,6 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
                     // Use glfwGetKeyName to get the actual character for keyboard layout independence
                     if (modifierHeld) {
                         const char* keyName = glfwGetKeyName(key, scancode);
-                        std::cout << "modifierHeld=true, key=" << key << " keyName=" << (keyName ? keyName : "null") << std::endl;
 
                         // Match by character name (works across all keyboard layouts)
                         if (keyName && strlen(keyName) == 1) {

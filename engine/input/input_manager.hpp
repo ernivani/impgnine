@@ -16,7 +16,7 @@ public:
     void processInput(float deltaTime);
     void handleMouseMovement();
     void handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& uiWindows);
-    void updateComponentHover(std::vector<UIWindow>& uiWindows, float mouseX, float mouseY, int fbWidth, int fbHeight);
+    void updateComponentHover(std::vector<UIWindow>& uiWindows, float mouseX, float mouseY);
 
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods, UIRenderer* uiRenderer, std::vector<UIWindow>& uiWindows);
     static void characterCallback(GLFWwindow* window, unsigned int codepoint, std::vector<UIWindow>& uiWindows);
