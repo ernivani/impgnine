@@ -64,6 +64,7 @@ namespace impgine {
         // Interaction
         void handleMouseClick(double xpos, double ypos, std::vector<UIWindow>& windows);
         Entity getSelectedEntity() const { return selectedEntity; }
+        void setSelectedEntity(Entity entity) { selectedEntity = entity; }
 
     private:
         void createVertexBuffer(VkDeviceSize size);

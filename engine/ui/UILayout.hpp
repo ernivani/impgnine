@@ -25,17 +25,20 @@ namespace impgine {
         int windowWidth;
         int windowHeight;
 
-        // Layout constraints (panel sizes)
-        float leftPanelWidth = 250.0f;
-        float rightPanelWidth = 300.0f;
-        float bottomPanelHeight = 200.0f;
-        float topPanelHeight = 40.0f;
+        // Layout constraints
+        // Ratios are relative to window width/height so panels are responsive
+        float leftPanelRatio = 0.18f;   // 18% of window width
+        float rightPanelRatio = 0.19f;  // 19% of window width
+        float bottomPanelRatio = 0.17f; // 17% of window height
+        float topPanelHeight = 40.0f;   // Keep top as fixed height (optional)
 
         // Calculated viewport rectangle (x, y, width, height)
         glm::vec4 viewportRect;
 
-        // Bottom panel Y position (computed during layout)
-        float bottomPanelY = 0.0f;
+        // Cached computed sizes for this layout pass
+        float currentLeftWidth = 0.0f;
+        float currentRightWidth = 0.0f;
+        float currentBottomHeight = 0.0f;
 
         void layoutDockedWindow(UIWindow& window);
     };

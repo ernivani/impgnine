@@ -80,13 +80,20 @@ namespace impgine {
 
         // Helper to initialize Unity-like UI layout
         void initializeUnityLayout();
+        void rebuildInspectorUI();
+
+        // Accessors for input and save handlers
+        public: const ProjectSettings& getProject() const { return project; }
+        public: ProjectSettings& getProject() { return project; }
+        public: Camera& getCamera() { return camera; }
 
         // Member variables
-        ProjectSettings project;
+        public: ProjectSettings project;
         std::unique_ptr<Window> window;
         std::unique_ptr<Pipeline> pipeline;
         std::unique_ptr<SwapChain> swapChain;
-        Camera camera;
+        public: Camera camera;
+        friend class InputManager;
 
         // Subsystems
         InputManager* inputManager = nullptr;

@@ -1,22 +1,24 @@
 %IMP 1.0
---- !imp!Entity &1
+Camera:
+  position: {x: -3.3227, y: -1.77481, z: -0.8737}
+  rotation: {x: -0.206679, y: -4.7729, z: 0}
+--- !imp!Entity
 name: VikingRoom
 Transform:
-  position: {x: 0, y: 0, z: 0}
+  position: {x: 1, y: 0, z: 0}
   rotation: {x: 0, y: 0, z: 0}
-  scale:    {x: 1, y: 1, z: 1}
-MeshRenderer3D:
+  scale: {x: 1, y: 1, z: 1}
+MeshRenderer:
   modelPath: assets/models/viking_room.obj
   texturePath: assets/textures/viking_room.png
-  color: {r: 1, g: 1, b: 1}
-
---- !imp!Entity &2
+  color: {x: 1, y: 1, z: 1}
+--- !imp!Entity
 name: Airplane
 Transform:
   position: {x: 5, y: 0, z: 0}
-  rotation: {x: 1.5, y: 0, z: 0}
-  scale:    {x: 1, y: 1, z: 1}
-MeshRenderer3D:
+  rotation: {x: 1, y: 0, z: 0}
+  scale: {x: 1, y: 1, z: 1}
+MeshRenderer:
   modelPath: assets/models/piper_pa18.obj
   texturePath: assets/textures/piper_diffuse.jpg
-  color: {r: 1, g: 1, b: 1}
+  color: {x: 1, y: 1, z: 1}

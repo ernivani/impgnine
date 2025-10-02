@@ -67,19 +67,26 @@ namespace impgine {
     struct UIInputField : public UIComponent {
         std::string text { "" };
         std::string placeholder { "Enter text..." };
+        std::function<void(const std::string&)> onCommit { nullptr };
         size_t cursorPosition { 0 };
         size_t selectionStart { 0 };
         size_t selectionEnd { 0 };
         size_t maxLength { 256 };
+        size_t scrollStart { 0 }; // first visible character index for horizontal scroll
 
         glm::vec4 backgroundColor { 0.25f, 0.25f, 0.3f, 1.0f };
         glm::vec4 focusedColor { 0.3f, 0.3f, 0.4f, 1.0f };
+        glm::vec4 hoverColor { 0.35f, 0.35f, 0.45f, 1.0f };
         glm::vec4 textColor { 1.0f, 1.0f, 1.0f, 1.0f };
         glm::vec4 placeholderColor { 0.6f, 0.6f, 0.6f, 1.0f };
         glm::vec4 cursorColor { 1.0f, 1.0f, 1.0f, 1.0f };
         glm::vec4 selectionColor { 0.4f, 0.6f, 0.9f, 0.5f };
+        glm::vec4 borderColor { 0.15f, 0.15f, 0.2f, 1.0f };
+        glm::vec4 borderHoverColor { 0.35f, 0.55f, 0.9f, 1.0f };
+        glm::vec4 borderFocusedColor { 0.3f, 0.6f, 1.0f, 1.0f };
 
         float padding { 8.0f };
+        float borderWidth { 2.0f };
 
         UIInputField() {
             type = UIComponentType::InputField;
@@ -212,7 +219,9 @@ namespace impgine {
         }
 
         glm::vec4 getCurrentBackgroundColor() const {
-            return state == UIComponentState::Focused ? focusedColor : backgroundColor;
+            if (state == UIComponentState::Focused) return focusedColor;
+            if (state == UIComponentState::Hovered) return hoverColor;
+            return backgroundColor;
         }
     };
 

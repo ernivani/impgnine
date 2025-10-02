@@ -45,7 +45,8 @@ namespace impgine {
         // UI shaders (path relative to project config)
         pipeline = std::make_unique<Pipeline>(device, vertPath, fragPath, cfg);
 
-        createVertexBuffer(1024 * sizeof(UIVertex));
+        // Increase buffer to avoid overflow when rendering many UI elements
+        createVertexBuffer(64 * 1024 * sizeof(UIVertex));
     }
 
     UIRenderer::~UIRenderer() {
@@ -111,9 +112,15 @@ namespace impgine {
         verts.reserve(windows.size() * 30);  // More vertices for detailed UI
 
         auto toNDC = [&](glm::vec2 px) {
+            // Layout uses top-left origin (Y=0 at top, increases downward)
+            // NDC needs bottom-left origin (Y=-1 at bottom, Y=+1 at top)
+            // So we flip: screenY=0 → NDC Y=+1, screenY=height → NDC Y=-1
+            float height = static_cast<float>(swapChain.getSwapChainExtent().height);
+            float flippedY = height - px.y;
+
             float nx = (px.x / static_cast<float>(swapChain.getSwapChainExtent().width)) * 2.0f - 1.0f;
-            float ny = (px.y / static_cast<float>(swapChain.getSwapChainExtent().height)) * 2.0f - 1.0f;
-            return glm::vec2(nx, -ny);
+            float ny = (flippedY / height) * 2.0f - 1.0f;
+            return glm::vec2(nx, ny);
         };
 
         auto addQuad = [&](glm::vec2 p, glm::vec2 s, glm::vec4 col) {
@@ -136,6 +143,11 @@ namespace impgine {
             glm::vec2 p = w.position;
             glm::vec2 s = w.size;
 
+            // Bottom panel is positioned at Y=0 in layout but should render at screen bottom
+            if (w.dockPosition == DockPosition::Bottom) {
+                p.y = 0;
+            }
+
             // Draw border
             if (w.borderWidth > 0.0f) {
                 addQuad(p, { s.x, w.borderWidth }, w.borderColor);  // Top
@@ -144,7 +156,7 @@ namespace impgine {
                 addQuad({ p.x + s.x - w.borderWidth, p.y }, { w.borderWidth, s.y }, w.borderColor);  // Right
             }
 
-            // Draw title bar
+            // Title bar at top of window
             glm::vec2 titleBarPos = { p.x + w.borderWidth, p.y + w.borderWidth };
             glm::vec2 titleBarSize = { s.x - 2.0f * w.borderWidth, w.titleBarHeight };
             if (w.titleBarHeight > 0.0f) {
@@ -155,7 +167,7 @@ namespace impgine {
                 renderText(w.title, titleTextPos, 0.4f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
             }
 
-            // Draw content area background
+            // Draw content area background (below title bar)
             glm::vec2 contentPos = { p.x + w.borderWidth, p.y + w.borderWidth + w.titleBarHeight };
             glm::vec2 contentSize = { s.x - 2.0f * w.borderWidth, s.y - w.titleBarHeight - 2.0f * w.borderWidth };
             addQuad(contentPos, contentSize, w.backgroundColor);
@@ -167,7 +179,7 @@ namespace impgine {
             // First collect vertices where text should be inserted
             size_t textInsertPoint = verts.size();
 
-            // Render components (adds rects to currentVertices, text directly to verts)
+            // Render components (toNDC handles Y-flip from top-left to bottom-left)
             for (const auto& comp : w.components) {
                 UIComponentRenderer::renderComponent(*this, *comp, contentPos, verts);
             }
@@ -181,99 +193,8 @@ namespace impgine {
             verts.insert(verts.begin() + textInsertPoint, rectsConverted.begin(), rectsConverted.end());
 
             // Render content based on window type
-            if (w.type == UIWindowType::Hierarchy) {
-                auto& registry = ECSRegistry::getRegistry();
-                const auto& entities = registry.getEntities();
-
-                float yOffset = contentPos.y + 10.0f;
-                float lineHeight = 25.0f;
-
-                for (const auto& entity : entities) {
-                    // Get Tag component to display entity name
-                    std::string entityName = "Entity " + std::to_string(entity);
-
-                    try {
-                        const auto& tag = registry.getComponent<Tag>(entity);
-                        if (!tag.tag.empty()) {
-                            entityName = tag.tag;
-                        }
-                    } catch (...) {
-                        // Entity doesn't have Tag component, use default name
-                    }
-
-                    // Highlight selected entity
-                    glm::vec4 textColor = (entity == selectedEntity) ? glm::vec4(0.3f, 0.6f, 1.0f, 1.0f) : glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-
-                    glm::vec2 textPos = { contentPos.x + 10.0f, yOffset };
-                    renderText(entityName, textPos, 0.4f, textColor, verts);
-                    yOffset += lineHeight;
-                }
-            } else if (w.type == UIWindowType::Inspector) {
-                // Display selected entity details
-                if (selectedEntity != INVALID_ENTITY) {
-                    auto& registry = ECSRegistry::getRegistry();
-
-                    float yOffset = contentPos.y + 10.0f;
-                    float lineHeight = 25.0f;
-
-                    // Entity name
-                    std::string entityName = "Entity " + std::to_string(selectedEntity);
-                    try {
-                        const auto& tag = registry.getComponent<Tag>(selectedEntity);
-                        if (!tag.tag.empty()) {
-                            entityName = tag.tag;
-                        }
-                    } catch (...) {}
-
-                    glm::vec2 textPos = { contentPos.x + 10.0f, yOffset };
-                    renderText(entityName, textPos, 0.5f, {1.0f, 1.0f, 1.0f, 1.0f}, verts);
-                    yOffset += lineHeight * 1.5f;
-
-                    // Transform component
-                    try {
-                        const auto& transform = registry.getComponent<Transform>(selectedEntity);
-
-                        renderText("Transform:", {contentPos.x + 10.0f, yOffset}, 0.4f, {0.8f, 0.8f, 0.8f, 1.0f}, verts);
-                        yOffset += lineHeight;
-
-                        std::string posStr = "Pos: " + std::to_string((int)transform.position.x) + ", " +
-                                            std::to_string((int)transform.position.y) + ", " +
-                                            std::to_string((int)transform.position.z);
-                        renderText(posStr, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
-                        yOffset += lineHeight;
-
-                        std::string rotStr = "Rot: " + std::to_string((int)transform.rotation.x) + ", " +
-                                            std::to_string((int)transform.rotation.y) + ", " +
-                                            std::to_string((int)transform.rotation.z);
-                        renderText(rotStr, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
-                        yOffset += lineHeight;
-
-                        std::string scaleStr = "Scale: " + std::to_string(transform.scale.x).substr(0, 4) + ", " +
-                                              std::to_string(transform.scale.y).substr(0, 4) + ", " +
-                                              std::to_string(transform.scale.z).substr(0, 4);
-                        renderText(scaleStr, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
-                        yOffset += lineHeight * 1.5f;
-                    } catch (...) {}
-
-                    // MeshRenderer3D component
-                    try {
-                        const auto& meshRenderer = registry.getComponent<MeshRenderer3D>(selectedEntity);
-
-                        renderText("MeshRenderer3D:", {contentPos.x + 10.0f, yOffset}, 0.4f, {0.8f, 0.8f, 0.8f, 1.0f}, verts);
-                        yOffset += lineHeight;
-
-                        if (meshRenderer.mesh) {
-                            std::string meshPath = meshRenderer.mesh->modelPath;
-                            // Show only filename
-                            size_t lastSlash = meshPath.find_last_of("/\\");
-                            if (lastSlash != std::string::npos) {
-                                meshPath = meshPath.substr(lastSlash + 1);
-                            }
-                            renderText("Mesh: " + meshPath, {contentPos.x + 20.0f, yOffset}, 0.35f, {0.7f, 0.7f, 0.7f, 1.0f}, verts);
-                        }
-                        yOffset += lineHeight;
-                    } catch (...) {}
-                }
+            if (w.type == UIWindowType::Inspector) {
+                // Inspector is now fully built from UI components; no direct text rendering here
             }
         }
 
@@ -309,9 +230,15 @@ namespace impgine {
         if (!textRenderer) return;
 
         auto toNDC = [&](glm::vec2 px) {
+            // Layout uses top-left origin (Y=0 at top, increases downward)
+            // NDC needs bottom-left origin (Y=-1 at bottom, Y=+1 at top)
+            // So we flip: screenY=0 → NDC Y=+1, screenY=height → NDC Y=-1
+            float height = static_cast<float>(swapChain.getSwapChainExtent().height);
+            float flippedY = height - px.y;
+
             float nx = (px.x / static_cast<float>(swapChain.getSwapChainExtent().width)) * 2.0f - 1.0f;
-            float ny = (px.y / static_cast<float>(swapChain.getSwapChainExtent().height)) * 2.0f - 1.0f;
-            return glm::vec2(nx, -ny);
+            float ny = (flippedY / height) * 2.0f - 1.0f;
+            return glm::vec2(nx, ny);
         };
 
         float xpos = position.x;
@@ -439,7 +366,6 @@ namespace impgine {
                 // Calculate which entity was clicked
                 float yOffset = contentPos.y + 10.0f;
                 float lineHeight = 25.0f;
-                int index = 0;
 
                 for (const auto& entity : entities) {
                     float itemTop = yOffset;
@@ -452,7 +378,6 @@ namespace impgine {
                     }
 
                     yOffset += lineHeight;
-                    index++;
                 }
             }
         }

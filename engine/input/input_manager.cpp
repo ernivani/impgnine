@@ -1,5 +1,7 @@
 #include "input_manager.hpp"
 #include "../ui/UIComponents.hpp"
+#include "../scene/scene_loader.hpp"
+#include "../engine.hpp"
 #include <GLFW/glfw3.h>
 #include <iostream>
 
@@ -143,6 +145,23 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
     // Update component hover states
     updateComponentHover(uiWindows, mouseX, mouseY);
 
+    // Change cursor to I-beam when hovering an input field
+    bool overInput = false;
+    for (auto& windowRef : uiWindows) {
+        if (!windowRef.isVisible) continue;
+        for (auto& comp : windowRef.components) {
+            if (comp->type == UIComponentType::InputField && comp->state == UIComponentState::Hovered) {
+                overInput = true; break;
+            }
+        }
+        if (overInput) break;
+    }
+    if (overInput) {
+        glfwSetCursor(window->getGLFWWindow(), glfwCreateStandardCursor(GLFW_IBEAM_CURSOR));
+    } else {
+        glfwSetCursor(window->getGLFWWindow(), nullptr);
+    }
+
     // Check if mouse is over any UI panel
     bool mouseOverUI = uiRenderer->getLayout().isPointOverUI(mouseX, mouseY, uiWindows);
 
@@ -166,10 +185,6 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
 void InputManager::characterCallback(GLFWwindow* window, unsigned int codepoint, std::vector<UIWindow>& uiWindows) {
     (void)window;
 
-    // Debug character input
-    if (codepoint == 'a' || codepoint == 'A') {
-        std::cout << "Character callback received: '" << static_cast<char>(codepoint) << "'" << std::endl;
-    }
 
     // Find focused input field
     for (auto& uiWindow : uiWindows) {
@@ -199,6 +214,20 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
 
     // On Mac, use Cmd for shortcuts; on other platforms, use Ctrl
     bool modifierHeld = cmdHeld || ctrlHeld;
+
+    // Save scene on Cmd/Ctrl+S
+    if ((cmdHeld || ctrlHeld) && key == GLFW_KEY_S) {
+        auto appPtr = glfwGetWindowUserPointer(window);
+        if (appPtr) {
+            auto& registry = ECSRegistry::getRegistry();
+            // Avoid needing Engine's private members by querying through Project singleton-like usage
+            // We know Engine set the window user pointer to itself; cast and access public members
+            impgine::Engine* app = static_cast<impgine::Engine*>(appPtr);
+            SceneLoader::saveScene(app->getProject().getFullPath(app->getProject().lastScene), app->getProject(), app->getCamera(), registry);
+            std::cout << "Scene saved." << std::endl;
+        }
+        return;
+    }
 
     // Find focused input field
     for (auto& uiWindow : uiWindows) {
@@ -235,11 +264,8 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
                                     input->insertText(std::string(clipboardText));
                                 }
                             } else if (keyChar == 'a') {
-                                std::cout << "MATCHED 'a'!" << std::endl;
                                 // Select all
                                 input->selectAll();
-                                std::cout << "Select All: text='" << input->text << "' selStart=" << input->selectionStart
-                                          << " selEnd=" << input->selectionEnd << " cursor=" << input->cursorPosition << std::endl;
                             }
                         }
 
@@ -273,8 +299,12 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
                         input->moveCursorToStart(shiftHeld);
                     } else if (key == GLFW_KEY_END) {
                         input->moveCursorToEnd(shiftHeld);
-                    } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_ESCAPE) {
-                        // Unfocus on Enter/Escape
+                    } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+                        // Commit on Enter
+                        if (input->onCommit) input->onCommit(input->text);
+                        comp->state = UIComponentState::Normal;
+                    } else if (key == GLFW_KEY_ESCAPE) {
+                        // Cancel focus on Escape
                         comp->state = UIComponentState::Normal;
                     }
                 }
@@ -338,6 +368,8 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
                             // Focus the input field
                             auto input = std::dynamic_pointer_cast<UIInputField>(comp);
                             if (input) {
+                                bool wasAlreadyFocused = (comp->state == UIComponentState::Focused);
+
                                 // Unfocus all other inputs
                                 for (auto& w : uiWindows) {
                                     for (auto& c : w.components) {
@@ -348,12 +380,17 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
                                 }
                                 comp->state = UIComponentState::Focused;
 
-                                // Set cursor position based on click location
-                                float relativeX = xpos - (absolutePos.x + input->padding);
-                                size_t clickPos = input->getCursorFromPixelOffset(relativeX);
-                                input->cursorPosition = clickPos;
-                                input->selectionStart = clickPos;
-                                input->selectionEnd = clickPos;
+                                // If field wasn't focused and has text, select all
+                                if (!wasAlreadyFocused && !input->text.empty()) {
+                                    input->selectAll();
+                                } else {
+                                    // Set cursor position based on click location
+                                    float relativeX = xpos - (absolutePos.x + input->padding);
+                                    size_t clickPos = input->getCursorFromPixelOffset(relativeX);
+                                    input->cursorPosition = clickPos;
+                                    input->selectionStart = clickPos;
+                                    input->selectionEnd = clickPos;
+                                }
                             }
                             break;
                         }
