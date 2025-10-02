@@ -14,6 +14,8 @@ namespace impgine {
         Hierarchy,      // Scene tree (left panel)
         Inspector,      // Object properties (right panel)
         Assets,         // Asset browser (bottom panel)
+        LoadingModal,   // Loading indicator modal
+        UnsavedChangesModal,  // Unsaved changes dialog
         Custom          // For extensibility
     };
 

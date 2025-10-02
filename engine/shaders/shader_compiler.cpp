@@ -18,7 +18,10 @@ bool ShaderCompiler::compileShader(const std::string& sourcePath, const std::str
 }
 
 void ShaderCompiler::compileAllShaders(const ProjectSettings& project) {
-    std::cout << "Compiling shaders..." << std::endl;
+    std::cout << "\n========================================" << std::endl;
+    std::cout << "   LOADING: Compiling shaders..." << std::endl;
+    std::cout << "========================================\n" << std::endl;
+
     std::string shaderPath = project.getShadersPath();
     std::string vertSource = shaderPath + "/shader.vert";
     std::string fragSource = shaderPath + "/shader.frag";
@@ -38,7 +41,9 @@ void ShaderCompiler::compileAllShaders(const ProjectSettings& project) {
     if (!vertSuccess || !fragSuccess || !uiVertSuccess || !uiFragSuccess) {
         throw std::runtime_error("Failed to compile shaders");
     }
-    std::cout << "All shaders compiled successfully!" << std::endl;
+    std::cout << "\n========================================" << std::endl;
+    std::cout << "   Shaders compiled successfully!" << std::endl;
+    std::cout << "========================================\n" << std::endl;
 }
 
 } // namespace impgine

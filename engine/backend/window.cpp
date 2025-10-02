@@ -31,6 +31,14 @@ namespace impgine {
         return glfwWindowShouldClose(window);
     }
 
+    void Window::close() {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+
+    void Window::cancelClose() {
+        glfwSetWindowShouldClose(window, GLFW_FALSE);
+    }
+
     void Window::pollEvents() const {
         glfwPollEvents();
     }

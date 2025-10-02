@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <thread>
+#include <chrono>
 
 // Include all the subsystem headers
 #include "shaders/shader_compiler.hpp"
@@ -33,6 +35,7 @@ Engine::Engine() {
     glfwSetMouseButtonCallback(window->getGLFWWindow(), mouseButtonCallback);
     glfwSetCharCallback(window->getGLFWWindow(), characterCallback);
     glfwSetKeyCallback(window->getGLFWWindow(), keyCallback);
+    glfwSetWindowCloseCallback(window->getGLFWWindow(), windowCloseCallback);
 
     initVulkan();
 }
@@ -43,7 +46,17 @@ Engine::~Engine() {
 
 void Engine::run() {
     std::cout << "Welcome to Impgine!\n";
+
+    // Initialize basic UI renderer first to show loading screen
+    initializeLoadingScreen();
+
+    // Show initial loading screen
+    showLoadingModal(true, 0.0f);
+    renderLoadingFrame(0.0f);
+
+    // Now load the scene with progress updates
     loadScene(project.getFullPath(project.lastScene));
+
     std::cout << "Project: " << project.projectName << " loaded" << std::endl;
     std::cout << "ECSRegistry currently has " << ECSRegistry::getRegistry().getEntities().size() << " entities" << std::endl;
 
@@ -396,8 +409,11 @@ void Engine::rebuildInspectorUI() {
                 }
             }
             field->text = txt;
-            field->onCommit = [setter](const std::string& s){
-                try { setter(std::stof(s)); } catch (...) {}
+            field->onCommit = [this, setter](const std::string& s){
+                try {
+                    setter(std::stof(s));
+                    markSceneModified();
+                } catch (...) {}
             };
             inspectorWindow.addComponent(field);
         };
@@ -543,6 +559,7 @@ void Engine::rebuildInspectorUI() {
             auto& r = ECSRegistry::getRegistry();
             auto& t = r.getComponent<Tag>(selected);
             t.tag = s;
+            markSceneModified();
             // Rebuild hierarchy to show updated name
             initializeUnityLayout();
         };
@@ -567,8 +584,13 @@ void Engine::rebuildInspectorUI() {
 }
 
 void Engine::loadScene(const std::string& scenePath) {
+    isLoadingScene = true;
+    currentScenePath = scenePath;
+
     // Use SceneLoader to load scene data into ECS
+    updateLoadingProgress(0.1f);
     SceneLoader::loadScene(scenePath, project);
+    updateLoadingProgress(0.2f);
 
     // Load camera pose from scene if present
     {
@@ -579,10 +601,24 @@ void Engine::loadScene(const std::string& scenePath) {
             camera.updateViewMatrix();
         }
     }
+    updateLoadingProgress(0.25f);
 
     // Load GPU resources for all entities with MeshRenderer components
     auto& reg = ECSRegistry::getRegistry();
-    for (const auto& entity : reg.getEntities()) {
+    auto entities = reg.getEntities();
+    size_t entityCount = 0;
+    size_t totalEntities = 0;
+
+    // Count entities with MeshRenderer
+    for (const auto& entity : entities) {
+        const auto& components = reg.getComponents(entity);
+        if (components.find(std::type_index(typeid(MeshRenderer))) != components.end()) {
+            totalEntities++;
+        }
+    }
+
+    // Load resources with progress updates
+    for (const auto& entity : entities) {
         const auto& components = reg.getComponents(entity);
         if (components.find(std::type_index(typeid(MeshRenderer))) != components.end()) {
             auto& meshRenderer = reg.getComponent<MeshRenderer>(entity);
@@ -591,37 +627,27 @@ void Engine::loadScene(const std::string& scenePath) {
 
             // Load mesh resources using ResourceManager
             resourceManager->loadMeshResources(modelPath, texturePath);
+            entityCount++;
+
+            // Progress from 25% to 60%
+            float progress = 0.25f + (0.35f * static_cast<float>(entityCount) / static_cast<float>(std::max(totalEntities, size_t(1))));
+            updateLoadingProgress(progress);
         }
     }
 
     // Create uniform buffers and descriptor sets
+    updateLoadingProgress(0.65f);
     uint32_t imageCount = static_cast<uint32_t>(swapChain->imageCount());
     createUniformBuffers(device, physicalDevice, imageCount,
                         uniformBuffers, uniformBuffersMemory);
-    createDescriptorSetLayout(device, descriptorSetLayout);
+
+    updateLoadingProgress(0.70f);
 
     uint32_t meshCount = static_cast<uint32_t>(resourceManager->getMeshCache().size());
     createDescriptorPool(device, meshCount, imageCount, descriptorPool);
     createDescriptorSets(device, descriptorPool, descriptorSetLayout, uniformBuffers,
                         imageCount, &resourceManager->getMeshCache());
-
-    // Create pipeline layout now that descriptor set layout exists
-    VkPushConstantRange pushConstantRange{};
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof(PushConstantData);
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
-
-    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) !=
-        VK_SUCCESS) {
-        throw std::runtime_error("failed to create pipeline layout!");
-    }
+    updateLoadingProgress(0.75f);
 
     // Create graphics pipeline
     PipelineConfigInfo pipelineConfig{};
@@ -633,25 +659,21 @@ void Engine::loadScene(const std::string& scenePath) {
     std::string vertShader = project.getShadersPath() + "/vert.spv";
     std::string fragShader = project.getShadersPath() + "/frag.spv";
     pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
+    updateLoadingProgress(0.85f);
 
-    createCommandBuffers(device, commandPool, SwapChain::MAX_FRAMES_IN_FLIGHT, commandBuffers);
+    // Initialize Unity-like layout
+    initializeUnityLayout();
+    updateLoadingProgress(0.95f);
 
-    // Initialize UI renderer and a default window
-    {
-        std::string uiVert = project.getShadersPath() + "/ui.vert.spv";
-        std::string uiFrag = project.getShadersPath() + "/ui.frag.spv";
-        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, commandPool, graphicsQueue, *swapChain, msaaSamples, uiVert, uiFrag);
+    // Small delay to show progress before hiding
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    updateLoadingProgress(1.0f);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-        // Load Arial font and create descriptor sets
-        std::string fontPath = project.getEnginePath() + "/TTF/arial.ttf";
-        uiRenderer->getTextRenderer()->loadFont(fontPath, 48);
-
-        // Create descriptor sets after font texture is loaded
-        uiRenderer->createDescriptorSets();
-
-        // Initialize Unity-like layout
-        initializeUnityLayout();
-    }
+    // Hide loading modal and mark scene as clean
+    showLoadingModal(false);
+    isLoadingScene = false;
+    sceneModified = false;
 }
 
 void Engine::drawFrame() {
@@ -781,6 +803,384 @@ void Engine::characterCallback(GLFWwindow* window, unsigned int codepoint) {
 void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
     InputManager::keyCallback(window, key, scancode, action, mods, app->uiWindows);
+}
+
+void Engine::windowCloseCallback(GLFWwindow* window) {
+    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+
+    // Release mouse capture if viewport is focused
+    if (app->inputManager && app->inputManager->isMouseCaptured()) {
+        app->inputManager->setMouseCaptured(false);
+        app->window->setCursorInputMode(GLFW_CURSOR_NORMAL);
+    }
+
+    // Check if scene has been modified
+    if (app->sceneModified) {
+        // Cancel the close and show dialog
+        app->window->cancelClose();
+        app->showUnsavedChangesDialog();
+    }
+    // If not modified, let the window close normally
+}
+
+void Engine::saveCurrentScene() {
+    if (currentScenePath.empty()) {
+        std::cerr << "No scene path to save to" << std::endl;
+        return;
+    }
+
+    auto& registry = ECSRegistry::getRegistry();
+    if (SceneLoader::saveScene(currentScenePath, project, camera, registry)) {
+        sceneModified = false;
+        std::cout << "Scene saved to: " << currentScenePath << std::endl;
+    } else {
+        std::cerr << "Failed to save scene to: " << currentScenePath << std::endl;
+    }
+}
+
+void Engine::showLoadingModal(bool show, float progress) {
+    if (!uiRenderer) return;
+
+    // Remove existing loading modal if any
+    auto it = std::find_if(uiWindows.begin(), uiWindows.end(),
+        [](const UIWindow& w) { return w.type == UIWindowType::LoadingModal; });
+
+    if (it != uiWindows.end()) {
+        uiWindows.erase(it);
+    }
+
+    if (!show) return;
+
+    // Create loading modal
+    UIWindow loadingModal;
+    loadingModal.title = "";
+    loadingModal.type = UIWindowType::LoadingModal;
+    loadingModal.dockPosition = DockPosition::Floating;
+    loadingModal.isVisible = true;
+
+    // Center the modal on screen
+    int ww = 0, wh = 0;
+    window->getFramebufferSize(&ww, &wh);
+
+    float modalWidth = 400.0f;
+    float modalHeight = 180.0f;
+    loadingModal.position = glm::vec2((ww - modalWidth) / 2.0f, (wh - modalHeight) / 2.0f);
+    loadingModal.size = glm::vec2(modalWidth, modalHeight);
+
+    // Dark semi-transparent background
+    loadingModal.backgroundColor = glm::vec4(0.1f, 0.1f, 0.1f, 0.95f);
+    loadingModal.titleBarHeight = 0.0f;
+    loadingModal.borderWidth = 2.0f;
+    loadingModal.borderColor = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);
+
+    // Add loading title
+    auto loadingLabel = std::make_shared<UILabel>();
+    loadingLabel->text = "Loading Scene...";
+    loadingLabel->position = glm::vec2(modalWidth / 2.0f - 80.0f, 30.0f);
+    loadingLabel->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    loadingModal.addComponent(loadingLabel);
+
+    // Add progress bar background
+    auto progressBg = std::make_shared<UIButton>();
+    progressBg->label = "";
+    progressBg->position = glm::vec2(40.0f, 80.0f);
+    progressBg->size = glm::vec2(modalWidth - 80.0f, 30.0f);
+    progressBg->normalColor = glm::vec4(0.15f, 0.15f, 0.15f, 1.0f);
+    progressBg->hoverColor = glm::vec4(0.15f, 0.15f, 0.15f, 1.0f);
+    progressBg->pressedColor = glm::vec4(0.15f, 0.15f, 0.15f, 1.0f);
+    progressBg->isEnabled = false;
+    loadingModal.addComponent(progressBg);
+
+    // Add progress bar fill
+    auto progressFill = std::make_shared<UIButton>();
+    progressFill->label = "";
+    progressFill->position = glm::vec2(40.0f, 80.0f);
+    float fillWidth = (modalWidth - 80.0f) * glm::clamp(progress, 0.0f, 1.0f);
+    progressFill->size = glm::vec2(fillWidth, 30.0f);
+    progressFill->normalColor = glm::vec4(0.2f, 0.6f, 0.9f, 1.0f);
+    progressFill->hoverColor = glm::vec4(0.2f, 0.6f, 0.9f, 1.0f);
+    progressFill->pressedColor = glm::vec4(0.2f, 0.6f, 0.9f, 1.0f);
+    progressFill->isEnabled = false;
+    loadingModal.addComponent(progressFill);
+
+    // Add percentage text
+    auto percentLabel = std::make_shared<UILabel>();
+    int percent = static_cast<int>(progress * 100.0f);
+    percentLabel->text = std::to_string(percent) + "%";
+    percentLabel->position = glm::vec2(modalWidth / 2.0f - 20.0f, 125.0f);
+    percentLabel->textColor = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
+    loadingModal.addComponent(percentLabel);
+
+    uiWindows.push_back(loadingModal);
+}
+
+void Engine::initializeLoadingScreen() {
+    // Create basic rendering infrastructure to show loading screen
+    // This is a minimal setup just for the loading UI
+
+    // Create command buffers for initial rendering
+    createCommandBuffers(device, commandPool, SwapChain::MAX_FRAMES_IN_FLIGHT, commandBuffers);
+
+    // Create basic UI renderer
+    std::string uiVert = project.getShadersPath() + "/ui.vert.spv";
+    std::string uiFrag = project.getShadersPath() + "/ui.frag.spv";
+
+    // We need a temporary descriptor set layout and pipeline layout for UI
+    VkDescriptorSetLayoutBinding uboLayoutBinding{};
+    uboLayoutBinding.binding = 0;
+    uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uboLayoutBinding.descriptorCount = 1;
+    uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+    samplerLayoutBinding.binding = 1;
+    samplerLayoutBinding.descriptorCount = 1;
+    samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create descriptor set layout!");
+    }
+
+    // Create pipeline layout
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(PushConstantData);
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+    if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create pipeline layout!");
+    }
+
+    // Initialize UI renderer
+    uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout,
+                                              commandPool, graphicsQueue, *swapChain, msaaSamples,
+                                              uiVert, uiFrag);
+
+    // Load font
+    std::string fontPath = project.getEnginePath() + "/TTF/arial.ttf";
+    uiRenderer->getTextRenderer()->loadFont(fontPath, 48);
+    uiRenderer->createDescriptorSets();
+}
+
+void Engine::renderLoadingFrame(float progress) {
+    (void)progress; // Unused parameter, progress is already shown in the UI
+    if (!uiRenderer) return;
+
+    window->pollEvents();
+
+    // Wait for previous frame
+    VkFence inFlightFence = swapChain->getInFlightFence(currentFrame);
+    vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
+
+    uint32_t imageIndex;
+    VkSemaphore imageAvailableSemaphore = swapChain->getImageAvailableSemaphore(currentFrame);
+    auto result = swapChain->acquireNextImage(&imageIndex, currentFrame, imageAvailableSemaphore);
+
+    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+        return; // Skip this frame
+    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+        throw std::runtime_error("failed to acquire swap chain image!");
+    }
+
+    vkResetFences(device, 1, &inFlightFence);
+
+    // Record command buffer with just the loading UI
+    vkResetCommandBuffer(commandBuffers[currentFrame], 0);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    if (vkBeginCommandBuffer(commandBuffers[currentFrame], &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("failed to begin recording command buffer!");
+    }
+
+    VkRenderPassBeginInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderPassInfo.renderPass = renderPass;
+    renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
+    renderPassInfo.renderArea.offset = {0, 0};
+    renderPassInfo.renderArea.extent = swapChain->getSwapChainExtent();
+
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = {{0.01f, 0.01f, 0.01f, 1.0f}};
+    clearValues[1].depthStencil = {1.0f, 0};
+
+    renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+    renderPassInfo.pClearValues = clearValues.data();
+
+    vkCmdBeginRenderPass(commandBuffers[currentFrame], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Render UI (loading screen)
+    uiRenderer->record(commandBuffers[currentFrame], *window, uiWindows, imageIndex);
+
+    vkCmdEndRenderPass(commandBuffers[currentFrame]);
+
+    if (vkEndCommandBuffer(commandBuffers[currentFrame]) != VK_SUCCESS) {
+        throw std::runtime_error("failed to record command buffer!");
+    }
+
+    // Submit command buffer
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+    VkSemaphore waitSemaphores[] = {imageAvailableSemaphore};
+    VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &commandBuffers[currentFrame];
+
+    VkSemaphore signalSemaphores[] = {swapChain->getRenderFinishedSemaphore(imageIndex)};
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
+        throw std::runtime_error("failed to submit draw command buffer!");
+    }
+
+    // Present frame
+    result = swapChain->presentFrame(presentQueue, &imageIndex, currentFrame);
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        return; // Skip
+    } else if (result != VK_SUCCESS) {
+        throw std::runtime_error("failed to present swap chain image!");
+    }
+
+    currentFrame = (currentFrame + 1) % SwapChain::MAX_FRAMES_IN_FLIGHT;
+}
+
+void Engine::updateLoadingProgress(float progress) {
+    showLoadingModal(true, progress);
+    renderLoadingFrame(progress);
+}
+
+void Engine::showUnsavedChangesDialog() {
+    if (!uiRenderer) return;
+
+    // Remove existing dialog if any
+    auto it = std::find_if(uiWindows.begin(), uiWindows.end(),
+        [](const UIWindow& w) { return w.type == UIWindowType::UnsavedChangesModal; });
+
+    if (it != uiWindows.end()) {
+        return; // Already showing
+    }
+
+    // Create unsaved changes modal
+    UIWindow dialog;
+    dialog.title = "Unsaved Changes";
+    dialog.type = UIWindowType::UnsavedChangesModal;
+    dialog.dockPosition = DockPosition::Floating;
+    dialog.isVisible = true;
+
+    // Center the modal on screen
+    int ww = 0, wh = 0;
+    window->getFramebufferSize(&ww, &wh);
+
+    float dialogWidth = 400.0f;
+    float dialogHeight = 200.0f;
+    dialog.position = glm::vec2((ww - dialogWidth) / 2.0f, (wh - dialogHeight) / 2.0f);
+    dialog.size = glm::vec2(dialogWidth, dialogHeight);
+
+    dialog.backgroundColor = glm::vec4(0.15f, 0.15f, 0.15f, 1.0f);
+    dialog.titleBarColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
+    dialog.titleBarHeight = 35.0f;
+    dialog.borderWidth = 2.0f;
+    dialog.borderColor = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);
+
+    // Add message text
+    auto messageLabel = std::make_shared<UILabel>();
+    messageLabel->text = "You have unsaved changes.";
+    messageLabel->position = glm::vec2(20.0f, 20.0f);
+    messageLabel->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    dialog.addComponent(messageLabel);
+
+    auto messageLabel2 = std::make_shared<UILabel>();
+    messageLabel2->text = "Do you want to save before closing?";
+    messageLabel2->position = glm::vec2(20.0f, 50.0f);
+    messageLabel2->textColor = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
+    dialog.addComponent(messageLabel2);
+
+    // Add buttons
+    float buttonWidth = 110.0f;
+    float buttonHeight = 35.0f;
+    float buttonSpacing = 10.0f;
+    float totalButtonWidth = buttonWidth * 3 + buttonSpacing * 2;
+    float startX = (dialogWidth - totalButtonWidth) / 2.0f;
+    float buttonY = dialogHeight - buttonHeight - 45.0f;
+
+    // Save button
+    auto saveButton = std::make_shared<UIButton>();
+    saveButton->label = "Save";
+    saveButton->position = glm::vec2(startX, buttonY);
+    saveButton->size = glm::vec2(buttonWidth, buttonHeight);
+    saveButton->normalColor = glm::vec4(0.2f, 0.5f, 0.8f, 1.0f);
+    saveButton->hoverColor = glm::vec4(0.3f, 0.6f, 0.9f, 1.0f);
+    saveButton->pressedColor = glm::vec4(0.15f, 0.4f, 0.7f, 1.0f);
+    saveButton->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    saveButton->onClick = [this]() {
+        saveCurrentScene();
+        // Close the dialog
+        auto it = std::find_if(uiWindows.begin(), uiWindows.end(),
+            [](const UIWindow& w) { return w.type == UIWindowType::UnsavedChangesModal; });
+        if (it != uiWindows.end()) uiWindows.erase(it);
+        // Proceed with closing - for now just close the window
+        window->close();
+    };
+    dialog.addComponent(saveButton);
+
+    // Don't Save button
+    auto dontSaveButton = std::make_shared<UIButton>();
+    dontSaveButton->label = "Don't Save";
+    dontSaveButton->position = glm::vec2(startX + buttonWidth + buttonSpacing, buttonY);
+    dontSaveButton->size = glm::vec2(buttonWidth, buttonHeight);
+    dontSaveButton->normalColor = glm::vec4(0.6f, 0.3f, 0.3f, 1.0f);
+    dontSaveButton->hoverColor = glm::vec4(0.7f, 0.4f, 0.4f, 1.0f);
+    dontSaveButton->pressedColor = glm::vec4(0.5f, 0.2f, 0.2f, 1.0f);
+    dontSaveButton->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    dontSaveButton->onClick = [this]() {
+        // Close the dialog and window without saving
+        auto it = std::find_if(uiWindows.begin(), uiWindows.end(),
+            [](const UIWindow& w) { return w.type == UIWindowType::UnsavedChangesModal; });
+        if (it != uiWindows.end()) uiWindows.erase(it);
+        sceneModified = false;
+        window->close();
+    };
+    dialog.addComponent(dontSaveButton);
+
+    // Cancel button
+    auto cancelButton = std::make_shared<UIButton>();
+    cancelButton->label = "Cancel";
+    cancelButton->position = glm::vec2(startX + (buttonWidth + buttonSpacing) * 2, buttonY);
+    cancelButton->size = glm::vec2(buttonWidth, buttonHeight);
+    cancelButton->normalColor = glm::vec4(0.25f, 0.25f, 0.25f, 1.0f);
+    cancelButton->hoverColor = glm::vec4(0.35f, 0.35f, 0.35f, 1.0f);
+    cancelButton->pressedColor = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);
+    cancelButton->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    cancelButton->onClick = [this]() {
+        // Just close the dialog
+        auto it = std::find_if(uiWindows.begin(), uiWindows.end(),
+            [](const UIWindow& w) { return w.type == UIWindowType::UnsavedChangesModal; });
+        if (it != uiWindows.end()) uiWindows.erase(it);
+    };
+    dialog.addComponent(cancelButton);
+
+    uiWindows.push_back(dialog);
 }
 
 }  // namespace impgine

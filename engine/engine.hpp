@@ -73,6 +73,7 @@ namespace impgine {
         static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
         static void characterCallback(GLFWwindow* window, unsigned int codepoint);
         static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+        static void windowCloseCallback(GLFWwindow* window);
 
         // Drawing
         void drawFrame();
@@ -86,6 +87,16 @@ namespace impgine {
         public: const ProjectSettings& getProject() const { return project; }
         public: ProjectSettings& getProject() { return project; }
         public: Camera& getCamera() { return camera; }
+
+        // Scene state tracking
+        public: void markSceneModified() { sceneModified = true; }
+        public: bool isSceneModified() const { return sceneModified; }
+        public: void saveCurrentScene();
+        private: void showUnsavedChangesDialog();
+        private: void showLoadingModal(bool show, float progress = 0.0f);
+        private: void updateLoadingProgress(float progress);
+        private: void initializeLoadingScreen();
+        private: void renderLoadingFrame(float progress);
 
         // Member variables
         public: ProjectSettings project;
@@ -148,6 +159,11 @@ namespace impgine {
         std::unique_ptr<UIRenderer> uiRenderer;
         std::vector<UIWindow> uiWindows;
         glm::vec2 lastInspectorSize { 0.0f, 0.0f };
+
+        // Scene state
+        bool sceneModified = false;
+        std::string currentScenePath;
+        bool isLoadingScene = false;
     };
 
 } // namespace impgine

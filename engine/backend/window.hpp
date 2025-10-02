@@ -18,6 +18,8 @@ namespace impgine {
         Window & operator = (const Window & ) = delete;
 
         bool shouldClose() const;
+        void close();
+        void cancelClose();
         void pollEvents() const;
         void waitEvents() const;
 
