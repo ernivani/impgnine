@@ -7,8 +7,8 @@
 
 namespace impgine {
 
-    UIRenderer::UIRenderer(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass, VkPipelineLayout pipelineLayout, VkCommandPool commandPool, VkQueue graphicsQueue, SwapChain& swapChain, VkSampleCountFlagBits samples, const std::string& vertSpvPath, const std::string& fragSpvPath)
-        : device(device), physicalDevice(physicalDevice), pipelineLayout(pipelineLayout), swapChain(swapChain), samples(samples), vertPath(vertSpvPath), fragPath(fragSpvPath),
+    UIRenderer::UIRenderer(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass, VkPipelineLayout pipelineLayout, VkCommandPool commandPool, VkQueue graphicsQueue, SwapChain& swapChain, const std::string& vertSpvPath, const std::string& fragSpvPath)
+        : device(device), physicalDevice(physicalDevice), swapChain(swapChain), vertPath(vertSpvPath), fragPath(fragSpvPath),
           layout(swapChain.getSwapChainExtent().width, swapChain.getSwapChainExtent().height) {
 
         textRenderer = std::make_unique<TextRenderer>(device, physicalDevice, commandPool, graphicsQueue);
@@ -33,7 +33,6 @@ namespace impgine {
         Pipeline::enableAlphaBlending(cfg);
         cfg.renderPass = renderPass;
         cfg.pipelineLayout = uiPipelineLayout;
-        cfg.multisampleInfo.rasterizationSamples = samples;
         cfg.depthStencilInfo.depthTestEnable = VK_FALSE;
         cfg.depthStencilInfo.depthWriteEnable = VK_FALSE;
 
@@ -366,7 +365,6 @@ namespace impgine {
                 // Calculate which entity was clicked
                 float yOffset = contentPos.y + 10.0f;
                 float lineHeight = 25.0f;
-                int index = 0;
 
                 for (const auto& entity : entities) {
                     float itemTop = yOffset;
@@ -379,7 +377,6 @@ namespace impgine {
                     }
 
                     yOffset += lineHeight;
-                    index++;
                 }
             }
         }

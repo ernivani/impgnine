@@ -419,7 +419,7 @@ void recreateSwapChain(
     if (uiRenderer) {
         delete uiRenderer;
         uiRenderer = new UIRenderer(device, physicalDevice, renderPass, pipelineLayout,
-                                   commandPool, graphicsQueue, *swapChain, msaaSamples,
+                                   commandPool, graphicsQueue, *swapChain,
                                    uiVertShaderPath, uiFragShaderPath);
 
         // Reload font and create descriptor sets

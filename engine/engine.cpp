@@ -622,7 +622,7 @@ void Engine::loadScene(const std::string& scenePath) {
     {
         std::string uiVert = project.getShadersPath() + "/ui.vert.spv";
         std::string uiFrag = project.getShadersPath() + "/ui.frag.spv";
-        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, commandPool, graphicsQueue, *swapChain, msaaSamples, uiVert, uiFrag);
+        uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, commandPool, graphicsQueue, *swapChain, uiVert, uiFrag);
 
         // Load Arial font and create descriptor sets
         std::string fontPath = project.getEnginePath() + "/TTF/arial.ttf";

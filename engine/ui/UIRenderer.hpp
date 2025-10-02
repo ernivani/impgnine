@@ -41,7 +41,7 @@ namespace impgine {
 
     class UIRenderer {
     public:
-        UIRenderer(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass, VkPipelineLayout pipelineLayout, VkCommandPool commandPool, VkQueue graphicsQueue, SwapChain& swapChain, VkSampleCountFlagBits samples, const std::string& vertSpvPath, const std::string& fragSpvPath);
+        UIRenderer(VkDevice device, VkPhysicalDevice physicalDevice, VkRenderPass renderPass, VkPipelineLayout pipelineLayout, VkCommandPool commandPool, VkQueue graphicsQueue, SwapChain& swapChain, const std::string& vertSpvPath, const std::string& fragSpvPath);
         ~UIRenderer();
 
         UIRenderer(const UIRenderer&) = delete;
@@ -76,13 +76,11 @@ namespace impgine {
         std::unique_ptr<Pipeline> pipeline;
         VkBuffer vertexBuffer { VK_NULL_HANDLE };
         VkDeviceMemory vertexMemory { VK_NULL_HANDLE };
-        VkPipelineLayout pipelineLayout;
         VkPipelineLayout uiPipelineLayout { VK_NULL_HANDLE };
         VkDescriptorSetLayout descriptorSetLayout { VK_NULL_HANDLE };
         VkDescriptorPool descriptorPool { VK_NULL_HANDLE };
         std::vector<VkDescriptorSet> descriptorSets;
         SwapChain& swapChain;
-        VkSampleCountFlagBits samples;
         std::string vertPath;
         std::string fragPath;
 

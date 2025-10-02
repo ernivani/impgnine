@@ -35,9 +35,6 @@ namespace impgine {
         // Calculated viewport rectangle (x, y, width, height)
         glm::vec4 viewportRect;
 
-        // Bottom panel Y position (computed during layout)
-        float bottomPanelY = 0.0f;
-
         // Cached computed sizes for this layout pass
         float currentLeftWidth = 0.0f;
         float currentRightWidth = 0.0f;

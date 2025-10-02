@@ -149,7 +149,6 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
     bool overInput = false;
     for (auto& windowRef : uiWindows) {
         if (!windowRef.isVisible) continue;
-        glm::vec2 contentPos = windowRef.getContentPosition();
         for (auto& comp : windowRef.components) {
             if (comp->type == UIComponentType::InputField && comp->state == UIComponentState::Hovered) {
                 overInput = true; break;
