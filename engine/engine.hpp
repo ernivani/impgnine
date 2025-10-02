@@ -30,6 +30,7 @@
 #include "project.hpp"
 #include "ui/UIRenderer.hpp"
 #include "ui/UIWindow.hpp"
+#include "rendering/outline_renderer.hpp"
 
 namespace impgine {
 
@@ -164,6 +165,10 @@ namespace impgine {
         bool sceneModified = false;
         std::string currentScenePath;
         bool isLoadingScene = false;
+
+        // Outline rendering
+        OutlineResources outlineResources;
+        public: uint32_t selectedEntity = INVALID_ENTITY;  // INVALID_ENTITY means no selection
     };
 
 } // namespace impgine

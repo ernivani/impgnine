@@ -13,12 +13,36 @@ MeshRenderer:
   texturePath: assets/textures/viking_room.png
   color: {x: 1, y: 1, z: 1}
 --- !imp!Entity
-name: Airplane
+name: Airplane1
 Transform:
   position: {x: 10, y: 10, z: 0}
   rotation: {x: 1.5, y: 0, z: 0}
   scale: {x: 1, y: 1, z: 1}
 MeshRenderer:
   modelPath: assets/models/piper_pa18.obj
-  texturePath: assets/textures/piper_diffuse.jpg
+  texturePath: assets/textures/viking_room.png
   color: {x: 1, y: 1, z: 1}
+--- !imp!Entity
+name: Airplane2
+Transform:
+  position: {x: 20, y: 10, z: 0}
+  rotation: {x: 1.5, y: 0, z: 0}
+  scale: {x: 1, y: 1, z: 1}
+MeshRenderer:
+  modelPath: assets/models/piper_pa18.obj
+  texturePath: assets/textures/viking_room.png
+  color: {x: 1, y: 1, z: 1}
+--- !imp!Entity
+name: Airplane3
+Transform:
+  position: {x: 30, y: 10, z: 0}
+  rotation: {x: 1.5, y: 0, z: 0}
+  scale: {x: 1, y: 1, z: 1}
+MeshRenderer:
+  modelPath: assets/models/viking_room.obj
+  texturePath: assets/textures/viking_room.png
+  color: {x: 1, y: 1, z: 1}
+
+
+
+

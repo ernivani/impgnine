@@ -142,6 +142,8 @@ void Engine::mainLoop() {
 }
 
 void Engine::cleanupSwapChain() {
+    cleanupOutlineResources(device, outlineResources);
+
     impgine::cleanupSwapChain(device, colorImageView, colorImage, colorImageMemory,
                               depthImageView, depthImage, depthImageMemory,
                               swapChainFramebuffers, pipeline.get(), renderPass, swapChain.get());
@@ -661,6 +663,13 @@ void Engine::loadScene(const std::string& scenePath) {
     pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
     updateLoadingProgress(0.85f);
 
+    // Initialize outline rendering resources
+    initOutlineResources(device, physicalDevice, swapChain->getSwapChainExtent(),
+                        descriptorSetLayout, imageCount, outlineResources);
+    // Create outline composite pipeline after render pass is ready
+    createOutlineCompositePipeline(device, renderPass, swapChain->getSwapChainExtent(), msaaSamples, outlineResources);
+    updateLoadingProgress(0.90f);
+
     // Initialize Unity-like layout
     initializeUnityLayout();
     updateLoadingProgress(0.95f);
@@ -711,6 +720,9 @@ void Engine::drawFrame() {
 
     // Inspector UI is rebuilt on selection change; avoid rebuilding each frame to preserve hover/focus
 
+    // Sync selected entity from UI for outline rendering
+    selectedEntity = uiRenderer->getSelectedEntity();
+
     // Record command buffer
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
     auto& registry = ECSRegistry::getRegistry();
@@ -718,7 +730,8 @@ void Engine::drawFrame() {
                                  swapChainFramebuffers, swapChain->getSwapChainExtent(),
                                  pipeline.get(), pipelineLayout,
                                  &resourceManager->getMeshCache(), &registry,
-                                 uiRenderer.get(), window.get(), &uiWindows);
+                                 uiRenderer.get(), window.get(), &uiWindows,
+                                 &outlineResources, selectedEntity);
 
     // Submit command buffer
     VkSubmitInfo submitInfo{};
@@ -780,6 +793,11 @@ void Engine::recreateSwapChain() {
     swapChain.reset(swapChainPtr);
     pipeline.reset(pipelinePtr);
     uiRenderer.reset(uiRendererPtr);
+
+    // Recreate outline resources with new extent
+    if (outlineResources.initialized) {
+        recreateOutlineResources(device, physicalDevice, swapChain->getSwapChainExtent(), outlineResources);
+    }
 }
 
 void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height) {

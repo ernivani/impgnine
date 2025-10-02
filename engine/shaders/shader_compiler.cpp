@@ -33,10 +33,18 @@ void ShaderCompiler::compileAllShaders(const ProjectSettings& project) {
     std::string uiVertOut = shaderPath + "/ui.vert.spv";
     std::string uiFragOut = shaderPath + "/ui.frag.spv";
 
+    // Post process shaders
+    std::string postProcessVertSrc = shaderPath + "/outline.vert";
+    std::string postProcessFragSrc = shaderPath + "/outline.frag";
+    std::string postProcessVertOut = shaderPath + "/outline_composite.vert";
+    std::string postProcessFragOut = shaderPath + "/outline_composite.frag";
+
     bool vertSuccess = compileShader(vertSource, vertOutput, "vertex");
     bool fragSuccess = compileShader(fragSource, fragOutput, "fragment");
     bool uiVertSuccess = compileShader(uiVertSrc, uiVertOut, "vertex");
     bool uiFragSuccess = compileShader(uiFragSrc, uiFragOut, "fragment");
+    bool postProcessVertSuccess = compileShader(postProcessVertSrc, postProcessVertOut, "vertex");
+    bool postProcessFragSuccess = compileShader(postProcessFragSrc, postProcessFragOut, "fragment");
 
     if (!vertSuccess || !fragSuccess || !uiVertSuccess || !uiFragSuccess) {
         throw std::runtime_error("Failed to compile shaders");

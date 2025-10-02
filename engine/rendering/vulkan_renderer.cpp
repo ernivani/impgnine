@@ -1,5 +1,6 @@
 #include "vulkan_renderer.hpp"
 #include "vulkan_resources.hpp"
+#include "outline_renderer.hpp"
 #include "../backend/swap_chain.hpp"
 #include "../backend/pipeline.hpp"
 #include "../backend/window.hpp"
@@ -87,7 +88,9 @@ void recordCommandBuffer(
     void* ecsRegistryPtr,
     void* uiRendererPtr,
     void* windowPtr,
-    void* uiWindowsPtr) {
+    void* uiWindowsPtr,
+    void* outlineResourcesPtr,
+    uint32_t selectedEntity) {
 
     Pipeline* pipeline = static_cast<Pipeline*>(pipelinePtr);
     auto& meshCache = *static_cast<std::unordered_map<std::string, MeshGPUResources>*>(meshCachePtr);
@@ -95,6 +98,7 @@ void recordCommandBuffer(
     UIRenderer* uiRenderer = static_cast<UIRenderer*>(uiRendererPtr);
     Window* window = static_cast<Window*>(windowPtr);
     auto& uiWindows = *static_cast<std::vector<UIWindow>*>(uiWindowsPtr);
+    OutlineResources* outlineResources = static_cast<OutlineResources*>(outlineResourcesPtr);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -118,6 +122,12 @@ void recordCommandBuffer(
         0, nullptr,
         0, nullptr
     );
+
+    // Render outline mask if entity is selected (INVALID_ENTITY is max uint32)
+    if (selectedEntity != INVALID_ENTITY && outlineResources && outlineResources->initialized) {
+        renderOutlineMask(commandBuffer, *outlineResources, swapChainExtent,
+                         meshCachePtr, ecsRegistryPtr, selectedEntity, imageIndex);
+    }
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -210,6 +220,11 @@ void recordCommandBuffer(
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &pushData);
 
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(meshResources.indices.size()), 1, 0, 0, 0);
+    }
+
+    // Composite outline if entity is selected (INVALID_ENTITY is max uint32)
+    if (selectedEntity != INVALID_ENTITY && outlineResources && outlineResources->initialized) {
+        compositeOutline(commandBuffer, *outlineResources, swapChainExtent, imageIndex);
     }
 
     // Draw UI on top

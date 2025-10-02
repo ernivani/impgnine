@@ -33,7 +33,9 @@ void recordCommandBuffer(
     void* ecsRegistryPtr,  // Will be cast to ECSRegistry*
     void* uiRendererPtr,  // Will be cast to UIRenderer*
     void* windowPtr,  // Will be cast to Window*
-    void* uiWindowsPtr);  // Will be cast to std::vector<UIWindow>*
+    void* uiWindowsPtr,  // Will be cast to std::vector<UIWindow>*
+    void* outlineResourcesPtr,  // Will be cast to OutlineResources*
+    uint32_t selectedEntity);
 
 void createCommandBuffers(
     VkDevice device,
