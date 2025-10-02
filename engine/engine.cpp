@@ -424,6 +424,10 @@ void Engine::rebuildInspectorUI() {
     addButton->label = "Add Component";
     addButton->position = glm::vec2(10.0f, y);
     addButton->size = glm::vec2(inspectorWindow.getContentSize().x - 20.0f, 28.0f);
+    addButton->normalColor = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
+    addButton->hoverColor = glm::vec4(0.16f, 0.16f, 0.16f, 1.0f);
+    addButton->pressedColor = glm::vec4(0.10f, 0.10f, 0.10f, 1.0f);
+    addButton->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
     addButton->onClick = [](){ std::cout << "Add Component clicked" << std::endl; };
     inspectorWindow.addComponent(addButton);
 }
@@ -539,8 +543,7 @@ void Engine::drawFrame() {
     ubo.proj = camera.getProjection();
     impgine::updateUniformBuffer(device, uniformBuffersMemory[imageIndex], &ubo, sizeof(ubo));
 
-    // Rebuild inspector UI each frame based on selection
-    rebuildInspectorUI();
+    // Inspector UI is rebuilt on selection change; avoid rebuilding each frame to preserve hover/focus
 
     // Record command buffer
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);

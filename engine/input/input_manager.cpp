@@ -143,6 +143,24 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
     // Update component hover states
     updateComponentHover(uiWindows, mouseX, mouseY);
 
+    // Change cursor to I-beam when hovering an input field
+    bool overInput = false;
+    for (auto& windowRef : uiWindows) {
+        if (!windowRef.isVisible) continue;
+        glm::vec2 contentPos = windowRef.getContentPosition();
+        for (auto& comp : windowRef.components) {
+            if (comp->type == UIComponentType::InputField && comp->state == UIComponentState::Hovered) {
+                overInput = true; break;
+            }
+        }
+        if (overInput) break;
+    }
+    if (overInput) {
+        glfwSetCursor(window->getGLFWWindow(), glfwCreateStandardCursor(GLFW_IBEAM_CURSOR));
+    } else {
+        glfwSetCursor(window->getGLFWWindow(), nullptr);
+    }
+
     // Check if mouse is over any UI panel
     bool mouseOverUI = uiRenderer->getLayout().isPointOverUI(mouseX, mouseY, uiWindows);
 
@@ -231,11 +249,8 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
                                     input->insertText(std::string(clipboardText));
                                 }
                             } else if (keyChar == 'a') {
-                                std::cout << "MATCHED 'a'!" << std::endl;
                                 // Select all
                                 input->selectAll();
-                                std::cout << "Select All: text='" << input->text << "' selStart=" << input->selectionStart
-                                          << " selEnd=" << input->selectionEnd << " cursor=" << input->cursorPosition << std::endl;
                             }
                         }
 

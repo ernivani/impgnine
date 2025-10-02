@@ -26,8 +26,22 @@ namespace impgine {
         glm::vec2 absolutePos = windowContentPos + input.position;
         glm::vec4 bgColor = input.getCurrentBackgroundColor();
 
-        // Draw input field background
+        // Draw input field background and border
         renderer.drawRect(absolutePos, input.size, bgColor);
+        // Border color depends on state
+        glm::vec4 borderCol = input.borderColor;
+        if (input.state == UIComponentState::Hovered) borderCol = input.borderHoverColor;
+        if (input.state == UIComponentState::Focused) borderCol = input.borderFocusedColor;
+        if (input.borderWidth > 0.0f) {
+            // Top
+            renderer.drawRect(absolutePos, { input.size.x, input.borderWidth }, borderCol);
+            // Bottom
+            renderer.drawRect({ absolutePos.x, absolutePos.y + input.size.y - input.borderWidth }, { input.size.x, input.borderWidth }, borderCol);
+            // Left
+            renderer.drawRect(absolutePos, { input.borderWidth, input.size.y }, borderCol);
+            // Right
+            renderer.drawRect({ absolutePos.x + input.size.x - input.borderWidth, absolutePos.y }, { input.borderWidth, input.size.y }, borderCol);
+        }
 
         // Draw text or placeholder
         glm::vec2 textPos = absolutePos + glm::vec2(input.padding, (input.size.y - 16.0f) * 0.5f);
