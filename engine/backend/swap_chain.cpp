@@ -24,7 +24,7 @@ namespace impgine {
             vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
             vkDestroyFence(device, inFlightFences[i], nullptr);
         }
-        
+
         for (size_t i = 0; i < renderFinishedSemaphores.size(); i++) {
             vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
         }
