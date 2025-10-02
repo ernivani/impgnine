@@ -31,6 +31,14 @@ namespace impgine {
         return glfwWindowShouldClose(window);
     }
 
+    void Window::close() {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+
+    void Window::cancelClose() {
+        glfwSetWindowShouldClose(window, GLFW_FALSE);
+    }
+
     void Window::pollEvents() const {
         glfwPollEvents();
     }
@@ -78,6 +86,14 @@ namespace impgine {
 
     void Window::setCursorInputMode(int mode) const {
         glfwSetInputMode(window, GLFW_CURSOR, mode);
+    }
+
+    bool Window::isMouseButtonPressed(int button) const {
+        return glfwGetMouseButton(window, button) == GLFW_PRESS;
+    }
+
+    void Window::getWindowSize(int* outWidth, int* outHeight) const {
+        glfwGetWindowSize(window, outWidth, outHeight);
     }
 
 } // namespace impgine

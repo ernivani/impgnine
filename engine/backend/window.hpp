@@ -18,6 +18,8 @@ namespace impgine {
         Window & operator = (const Window & ) = delete;
 
         bool shouldClose() const;
+        void close();
+        void cancelClose();
         void pollEvents() const;
         void waitEvents() const;
 
@@ -38,6 +40,9 @@ namespace impgine {
         void getCursorPos(double* xpos, double* ypos) const;
         void setCursorPos(double xpos, double ypos) const;
         void setCursorInputMode(int mode) const;
+        void setCursor(int shape) const { glfwSetCursor(window, glfwCreateStandardCursor(shape)); }
+        bool isMouseButtonPressed(int button) const;
+        void getWindowSize(int* outWidth, int* outHeight) const;
 
         private: int width;
         int height;

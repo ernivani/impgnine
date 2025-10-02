@@ -10,8 +10,6 @@ namespace impgine {
 struct ProjectSettings {
     std::string projectPath;
     std::string projectName;
-    std::string version;
-    std::string engineVersion;
 
     // Window settings
     int windowWidth = 800;
@@ -22,19 +20,26 @@ struct ProjectSettings {
     int msaaSamples = 4;
     bool vsync = true;
 
-    // Asset paths (relative to project folder)
-    std::string scenesPath = "assets/scenes";
-    std::string modelsPath = "assets/models";
-    std::string texturesPath = "assets/textures";
-    std::string shadersPath = "engine/shaders";
-
-    // Startup
-    std::string startupScene = "assets/scenes/scene.imp";
+    // Last opened scene
+    std::string lastScene = "Assets/Scenes/scene.imp";
 
     // Helper to get full path
     std::string getFullPath(const std::string& relativePath) const {
         return projectPath + "/" + relativePath;
     }
+
+    // Convert absolute paths back to project-relative if possible
+    std::string toRelativePath(const std::string& absolutePath) const {
+        // Normalize simple case: if it starts with projectPath + "/", strip it
+        if (absolutePath.rfind(projectPath + "/", 0) == 0) {
+            return absolutePath.substr(projectPath.size() + 1);
+        }
+        return absolutePath; // Already relative or external
+    }
+
+    // Engine paths (standardized by engine)
+    std::string getEnginePath() const { return projectPath + "/Engine"; }
+    std::string getShadersPath() const { return projectPath + "/Engine/Shaders"; }
 };
 
 class Project {
@@ -46,6 +51,14 @@ public:
         size_t lastSlash = projectFilePath.find_last_of("/\\");
         if (lastSlash != std::string::npos) {
             settings.projectPath = projectFilePath.substr(0, lastSlash);
+        }
+
+        // Extract project name from folder name
+        size_t secondLastSlash = settings.projectPath.find_last_of("/\\");
+        if (secondLastSlash != std::string::npos) {
+            settings.projectName = settings.projectPath.substr(secondLastSlash + 1);
+        } else {
+            settings.projectName = settings.projectPath;
         }
 
         std::ifstream file(projectFilePath);
@@ -83,12 +96,7 @@ public:
             std::string value = trim(line.substr(sep + 1));
 
             // Parse based on current section
-            if (currentSection == "project") {
-                if (key == "name") settings.projectName = value;
-                else if (key == "version") settings.version = value;
-                else if (key == "engine_version") settings.engineVersion = value;
-            }
-            else if (currentSection == "window") {
+            if (currentSection == "window") {
                 if (key == "width") settings.windowWidth = std::stoi(value);
                 else if (key == "height") settings.windowHeight = std::stoi(value);
                 else if (key == "title") settings.windowTitle = value;
@@ -97,14 +105,8 @@ public:
                 if (key == "msaa_samples") settings.msaaSamples = std::stoi(value);
                 else if (key == "vsync") settings.vsync = (value == "true");
             }
-            else if (currentSection == "assets") {
-                if (key == "scenes_path") settings.scenesPath = value;
-                else if (key == "models_path") settings.modelsPath = value;
-                else if (key == "textures_path") settings.texturesPath = value;
-                else if (key == "shaders_path") settings.shadersPath = value;
-            }
-            else if (currentSection == "startup") {
-                if (key == "scene") settings.startupScene = value;
+            else if (currentSection == "editor") {
+                if (key == "last_scene") settings.lastScene = value;
             }
         }
 

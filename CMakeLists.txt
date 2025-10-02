@@ -20,25 +20,28 @@ find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
 # Prefer CMake config package for glm (works with Homebrew and vcpkg)
 find_package(glm CONFIG REQUIRED)
+find_package(Freetype REQUIRED)
 
 # Create executable
 file(GLOB_RECURSE SOURCES "engine/*.cpp")
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 # Link libraries
-target_link_libraries(${PROJECT_NAME} 
+target_link_libraries(${PROJECT_NAME}
     PRIVATE
     Vulkan::Vulkan
     glfw
     glm::glm
+    Freetype::Freetype
 )
 
 # Include directories
-target_include_directories(${PROJECT_NAME} 
+target_include_directories(${PROJECT_NAME}
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/engine
     ${CMAKE_CURRENT_SOURCE_DIR}/external
     ${Vulkan_INCLUDE_DIRS}
+    ${FREETYPE_INCLUDE_DIRS}
 )
 
 # Compiler-specific options
