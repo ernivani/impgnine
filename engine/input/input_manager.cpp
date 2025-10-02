@@ -545,7 +545,7 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
         if (engine->isDraggingEntity) {
             // Find the tree node under the cursor
             double xpos, ypos;
-            glfwGetCursorPos(glfwGetCurrentContext(), &xpos, &ypos);
+            glfwGetCursorPos(window, &xpos, &ypos);
 
             UITreeNode* dropTarget = nullptr;
 

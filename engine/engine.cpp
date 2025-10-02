@@ -131,16 +131,23 @@ void Engine::createECSRegistry() {
 
 void Engine::mainLoop() {
     auto lastTime = std::chrono::high_resolution_clock::now();
-    
+
     while (!window->shouldClose()) {
         auto currentTime = std::chrono::high_resolution_clock::now();
         float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
-        
+
         window->pollEvents();
         inputManager->handleUIInput(uiRenderer.get(), uiWindows);
         inputManager->processInput(deltaTime);
         inputManager->handleMouseMovement();
+
+        // Rebuild hierarchy if needed (after input processing but before rendering)
+        if (needsHierarchyRebuild) {
+            rebuildHierarchyUI();
+            needsHierarchyRebuild = false;
+        }
+
         drawFrame();
     }
     vkDeviceWaitIdle(device);
@@ -304,7 +311,7 @@ void Engine::rebuildInspectorUI() {
 
     float y = 10.0f;
 
-    // Header: Entity name
+    // Header: Entity name (editable)
     {
         std::string name = "Entity " + std::to_string(selected);
         try {
@@ -312,12 +319,32 @@ void Engine::rebuildInspectorUI() {
             if (!tag.tag.empty()) name = tag.tag;
         } catch (...) {}
 
-        auto nameLabel = std::make_shared<UILabel>();
-        nameLabel->text = name;
-        nameLabel->position = glm::vec2(10.0f, y);
-        nameLabel->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-        inspectorWindow.addComponent(nameLabel);
-        y += 30.0f;
+        auto nameField = std::make_shared<UIInputField>();
+        nameField->text = name;
+        nameField->position = glm::vec2(10.0f, y);
+        nameField->size = glm::vec2(inspectorWindow.getContentSize().x - 20.0f, 32.0f);
+        nameField->backgroundColor = glm::vec4(0.18f, 0.18f, 0.2f, 1.0f);
+        nameField->focusedColor = glm::vec4(0.22f, 0.22f, 0.25f, 1.0f);
+        nameField->hoverColor = glm::vec4(0.2f, 0.2f, 0.22f, 1.0f);
+        nameField->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        nameField->borderWidth = 1.0f;
+        nameField->padding = 8.0f;
+        nameField->onCommit = [this, selected](const std::string& newName) {
+            auto& reg = ECSRegistry::getRegistry();
+            try {
+                auto& tag = reg.getComponent<Tag>(selected);
+                tag.tag = newName;
+                markSceneModified();
+                needsHierarchyRebuild = true;  // Rebuild hierarchy to show new name
+            } catch (...) {
+                // Entity doesn't have a tag component, add one
+                reg.addComponent<Tag>(selected, Tag{newName});
+                markSceneModified();
+                needsHierarchyRebuild = true;
+            }
+        };
+        inspectorWindow.addComponent(nameField);
+        y += 40.0f;
     }
 
     // Transform section with better styling
@@ -462,7 +489,7 @@ void Engine::rebuildInspectorUI() {
             inspectorWindow.addComponent(meshLabel);
 
             auto meshPath = std::make_shared<UILabel>();
-            meshPath->text = meshRenderer.mesh->modelPath;
+            meshPath->text = project.toRelativePath(meshRenderer.mesh->modelPath);
             meshPath->position = glm::vec2(100.0f, y + 5.0f);
             meshPath->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
             inspectorWindow.addComponent(meshPath);
@@ -478,7 +505,7 @@ void Engine::rebuildInspectorUI() {
             inspectorWindow.addComponent(texLabel);
 
             auto texPath = std::make_shared<UILabel>();
-            texPath->text = meshRenderer.texture->texturePath;
+            texPath->text = project.toRelativePath(meshRenderer.texture->texturePath);
             texPath->position = glm::vec2(100.0f, y + 5.0f);
             texPath->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
             inspectorWindow.addComponent(texPath);
@@ -1205,9 +1232,13 @@ void Engine::rebuildHierarchyUI() {
         treeNode->label = entityName;
         treeNode->entityId = entity;
         treeNode->depth = depth;
-        treeNode->position = glm::vec2(10.0f, y);
-        treeNode->size = glm::vec2(hierarchyWindow.getContentSize().x - 20.0f, rowHeight);
+        treeNode->position = glm::vec2(0.0f, y);
+        treeNode->size = glm::vec2(hierarchyWindow.getContentSize().x, rowHeight);
         treeNode->isSelected = (selectedEntity == entity);
+
+        // Check if entity has children
+        auto children = registry.getChildren(entity);
+        treeNode->hasChildren = !children.empty();
 
         // Check if expanded
         auto expandIt = expandedEntities.find(entity);
@@ -1218,13 +1249,13 @@ void Engine::rebuildHierarchyUI() {
             selectedEntity = entity;
             if (uiRenderer) uiRenderer->setSelectedEntity(entity);
             rebuildInspectorUI();
-            rebuildHierarchyUI();  // Refresh to update selection
+            // Don't rebuild hierarchy here - it will be rebuilt on next frame
         };
 
-        // Expand/collapse handler
+        // Expand/collapse handler - mark for rebuild, don't do it immediately
         treeNode->onToggleExpand = [this, entity]() {
             expandedEntities[entity] = !expandedEntities[entity];
-            rebuildHierarchyUI();
+            needsHierarchyRebuild = true;
         };
 
         // Drop handler for reparenting
@@ -1246,7 +1277,7 @@ void Engine::rebuildHierarchyUI() {
                 if (!wouldCreateCycle) {
                     reg.setParent(draggedEnt, entity);
                     markSceneModified();
-                    rebuildHierarchyUI();
+                    needsHierarchyRebuild = true;
                 }
             }
         };
@@ -1278,15 +1309,16 @@ void Engine::rebuildHierarchyUI() {
     createButton->hoverColor = glm::vec4(0.30f, 0.55f, 0.45f, 1.0f);
     createButton->pressedColor = glm::vec4(0.20f, 0.40f, 0.30f, 1.0f);
     createButton->onClick = [this]() {
+        // Create with default mesh if available
+        std::string defaultModel = project.getFullPath("assets/models/viking_room.obj");
+        std::string defaultTexture = project.getFullPath("assets/textures/viking_room.png");
         auto& reg = ECSRegistry::getRegistry();
         Entity newEntity = reg.createEntity();
         reg.addComponent<Tag>(newEntity, Tag{"New Entity"});
         reg.addComponent<Transform>(newEntity, Transform{});
         reg.addComponent<Active>(newEntity, Active{true, true});
 
-        // Create with default mesh if available
-        std::string defaultModel = project.getFullPath("models/viking_room.obj");
-        std::string defaultTexture = project.getFullPath("textures/viking_room.png");
+        // Create empty mesh renderer (user can set paths in inspector)
         reg.addComponent<MeshRenderer>(newEntity, MeshRenderer{
             std::make_shared<Mesh>(defaultModel),
             std::make_shared<Texture2D>(defaultTexture),
@@ -1295,7 +1327,7 @@ void Engine::rebuildHierarchyUI() {
 
         selectedEntity = newEntity;
         markSceneModified();
-        rebuildHierarchyUI();
+        needsHierarchyRebuild = true;
         rebuildInspectorUI();
     };
     hierarchyWindow.addComponent(createButton);

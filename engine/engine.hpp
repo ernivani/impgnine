@@ -175,6 +175,7 @@ namespace impgine {
         public: uint32_t draggedEntity = INVALID_ENTITY;
         public: bool isDraggingEntity = false;
         private: std::unordered_map<uint32_t, bool> expandedEntities;  // Track which entities are expanded in hierarchy
+        private: bool needsHierarchyRebuild = false;
     };
 
 } // namespace impgine

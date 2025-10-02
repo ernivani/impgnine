@@ -310,31 +310,40 @@ namespace impgine {
         bool isSelected { false };
         bool isDragging { false };
         bool isDropTarget { false };
+        bool hasChildren { false };
 
         std::function<void(uint32_t)> onClick { nullptr };
         std::function<void(uint32_t, uint32_t)> onDrop { nullptr };  // (draggedEntity, targetEntity)
         std::function<void()> onToggleExpand { nullptr };
 
-        glm::vec4 normalColor { 0.12f, 0.12f, 0.12f, 1.0f };
-        glm::vec4 hoverColor { 0.16f, 0.16f, 0.16f, 1.0f };
-        glm::vec4 selectedColor { 0.25f, 0.40f, 0.60f, 1.0f };
+        glm::vec4 normalColor { 0.22f, 0.22f, 0.22f, 1.0f };
+        glm::vec4 hoverColor { 0.28f, 0.28f, 0.28f, 1.0f };
+        glm::vec4 selectedColor { 0.17f, 0.36f, 0.53f, 1.0f };  // Unity blue
+        glm::vec4 selectedHoverColor { 0.19f, 0.39f, 0.58f, 1.0f };
         glm::vec4 dropTargetColor { 0.30f, 0.50f, 0.30f, 1.0f };
-        glm::vec4 textColor { 1.0f, 1.0f, 1.0f, 1.0f };
-        glm::vec4 arrowColor { 0.7f, 0.7f, 0.7f, 1.0f };
+        glm::vec4 textColor { 0.85f, 0.85f, 0.85f, 1.0f };
+        glm::vec4 selectedTextColor { 1.0f, 1.0f, 1.0f, 1.0f };
+        glm::vec4 arrowColor { 0.6f, 0.6f, 0.6f, 1.0f };
 
-        float indentSize { 16.0f };
-        float arrowSize { 10.0f };
+        float indentSize { 14.0f };
+        float arrowSize { 8.0f };
+        float iconSize { 14.0f };
 
         UITreeNode() {
             type = UIComponentType::TreeNode;
-            size = glm::vec2(200.0f, 22.0f);
+            size = glm::vec2(200.0f, 18.0f);
         }
 
         glm::vec4 getCurrentColor() const {
             if (isDropTarget) return dropTargetColor;
+            if (isSelected && state == UIComponentState::Hovered) return selectedHoverColor;
             if (isSelected) return selectedColor;
             if (state == UIComponentState::Hovered) return hoverColor;
             return normalColor;
+        }
+
+        glm::vec4 getCurrentTextColor() const {
+            return isSelected ? selectedTextColor : textColor;
         }
 
         float getIndentOffset() const {
@@ -343,7 +352,7 @@ namespace impgine {
 
         bool isPointInArrow(const glm::vec2& point) const {
             float arrowX = position.x + getIndentOffset();
-            return point.x >= arrowX && point.x <= arrowX + arrowSize &&
+            return point.x >= arrowX && point.x <= arrowX + arrowSize + 4.0f &&
                    point.y >= position.y && point.y <= position.y + size.y;
         }
     };
