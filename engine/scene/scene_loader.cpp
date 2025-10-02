@@ -29,6 +29,8 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
 
     struct PendingEntity {
         std::optional<std::string> tag;
+        std::optional<std::string> parentName;
+        bool isActive = true;
         glm::vec3 position {0.0f};
         glm::vec3 rotation {0.0f};
         glm::vec3 scale {1.0f};
@@ -81,6 +83,16 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
                 continue;
             }
 
+            if (key == "parent") {
+                if (!value.empty()) current.parentName = value;
+                continue;
+            }
+
+            if (key == "active") {
+                current.isActive = (value == "true" || value == "1");
+                continue;
+            }
+
             auto parseObjVec3 = [&](const std::string& obj) -> glm::vec3 {
                 // Expect: {x: a, y: b, z: c} or {r: a, g: b, b: c}
                 glm::vec3 out{0.0f};
@@ -127,18 +139,43 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
 
     // Instantiate ECS entities and components
     auto& reg = ECSRegistry::getRegistry();
+    std::unordered_map<std::string, Entity> entityNameMap;
+
+    // First pass: create all entities
     for (const auto& pe : entitiesToCreate) {
         Entity e = reg.createEntity();
         reg.addComponent<impgine::Transform>(e, { pe.position, pe.rotation, pe.scale });
+
         if (pe.tag.has_value()) {
             reg.addComponent<impgine::Tag>(e, impgine::Tag{ *pe.tag });
+            entityNameMap[*pe.tag] = e;
         }
+
+        // Set active state
+        reg.addComponent<impgine::Active>(e, impgine::Active{ pe.isActive, pe.isActive });
 
         // Resolve paths relative to project
         std::string fullModelPath = project.getFullPath(pe.modelPath);
         std::string fullTexturePath = project.getFullPath(pe.texturePath);
 
         reg.addComponent<impgine::MeshRenderer>(e, impgine::MeshRenderer{ std::make_shared<impgine::Mesh>(fullModelPath), std::make_shared<impgine::Texture2D>(fullTexturePath), pe.color });
+    }
+
+    // Second pass: establish hierarchy relationships
+    for (size_t i = 0; i < entitiesToCreate.size(); ++i) {
+        const auto& pe = entitiesToCreate[i];
+        if (pe.parentName.has_value()) {
+            auto parentIt = entityNameMap.find(*pe.parentName);
+            if (parentIt != entityNameMap.end()) {
+                Entity child = reg.getEntities()[i];
+                Entity parent = parentIt->second;
+                reg.setParent(child, parent);
+            } else {
+                std::cerr << "Warning: Parent '" << *pe.parentName << "' not found for entity";
+                if (pe.tag.has_value()) std::cerr << " '" << *pe.tag << "'";
+                std::cerr << "\n";
+            }
+        }
     }
 }
 
@@ -209,6 +246,23 @@ bool SceneLoader::saveScene(const std::string& scenePath, const ProjectSettings&
         try {
             const auto& tag = registry.getComponent<Tag>(e);
             file << "name: " << tag.tag << "\n";
+        } catch (...) {}
+
+        // Write parent relationship
+        try {
+            const auto& hierarchy = registry.getComponent<Hierarchy>(e);
+            if (hierarchy.parent != INVALID_ENTITY) {
+                try {
+                    const auto& parentTag = registry.getComponent<Tag>(hierarchy.parent);
+                    file << "parent: " << parentTag.tag << "\n";
+                } catch (...) {}
+            }
+        } catch (...) {}
+
+        // Write active state
+        try {
+            const auto& active = registry.getComponent<Active>(e);
+            file << "active: " << (active.isActiveSelf ? "true" : "false") << "\n";
         } catch (...) {}
 
         try {

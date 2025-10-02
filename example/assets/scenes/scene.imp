@@ -1,7 +1,7 @@
 %IMP 1.0
 Camera:
-  position: {x: 27.3339, y: -4.67185, z: 5.99058}
-  rotation: {x: 0.0732423, y: -1.39437, z: 0}
+  position: {x: 24.078, y: -2.71412, z: 7.55952}
+  rotation: {x: 0.368305, y: -0.825846, z: 0}
 --- !imp!Entity
 name: VikingRoom
 Transform:

@@ -808,7 +808,6 @@ void renderOutlineMask(
 
     // Render the selected entity
     try {
-        auto& transform = registry->getComponent<impgine::Transform>(selectedEntity);
         auto& meshRenderer = registry->getComponent<impgine::MeshRenderer>(selectedEntity);
 
         auto meshIt = meshCache.find(meshRenderer.mesh->modelPath);
@@ -826,13 +825,8 @@ void renderOutlineMask(
             vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
             vkCmdBindIndexBuffer(commandBuffer, meshResources.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-            // Build model matrix (rotation values are already in radians in the Transform component)
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, transform.position);
-            model = glm::rotate(model, transform.rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model, transform.rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::rotate(model, transform.rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
-            model = glm::scale(model, transform.scale);
+            // Get world transform matrix (handles hierarchy automatically)
+            glm::mat4 model = impgine::Transform::getWorldMatrix(selectedEntity);
 
             PushConstantData pushConstants{};
             pushConstants.model = model;

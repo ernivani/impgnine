@@ -6,6 +6,13 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <string>
+#include <vector>
+#include <cstdint>
+#include <limits>
+
+// Forward declare Entity and INVALID_ENTITY from ECSRegistry.hpp
+using Entity = uint32_t;
+extern const Entity INVALID_ENTITY;
 
 namespace impgine {
 
@@ -39,10 +46,26 @@ namespace impgine {
         glm::vec3 position {0.0f, 0.0f, 0.0f};
         glm::vec3 rotation {0.0f, 0.0f, 0.0f};
         glm::vec3 scale {1.0f, 1.0f, 1.0f};
+
+        // Get local transform matrix
+        glm::mat4 getLocalMatrix() const;
+
+        // Get world transform (requires hierarchy traversal)
+        static glm::mat4 getWorldMatrix(Entity entity);
     };
 
     struct Tag {
         std::string tag;
+    };
+
+    struct Hierarchy {
+        Entity parent = INVALID_ENTITY;
+        std::vector<Entity> children;
+    };
+
+    struct Active {
+        bool isActive = true;
+        bool isActiveSelf = true;  // Active state ignoring parent hierarchy
     };
 
     struct SpriteRenderer {
