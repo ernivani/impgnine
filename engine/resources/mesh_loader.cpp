@@ -6,7 +6,7 @@
 
 namespace impgine {
 
-void MeshLoader::loadModel(const std::string& path, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices) {
+void MeshLoader::loadModel(const std::string& path, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices, AABB* outBoundingBox) {
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
@@ -17,6 +17,7 @@ void MeshLoader::loadModel(const std::string& path, std::vector<Vertex>& vertice
     }
 
     std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+    AABB bbox;  // Local bounding box
 
     for (const auto& shape : shapes) {
         for (const auto& index : shape.mesh.indices) {
@@ -27,6 +28,9 @@ void MeshLoader::loadModel(const std::string& path, std::vector<Vertex>& vertice
                 attrib.vertices[3 * index.vertex_index + 1],
                 attrib.vertices[3 * index.vertex_index + 2]
             };
+
+            // Expand bounding box
+            bbox.expand(vertex.pos);
 
             if (index.texcoord_index >= 0 && static_cast<size_t>(index.texcoord_index) < attrib.texcoords.size() / 2) {
                 vertex.texCoord = {
@@ -46,6 +50,11 @@ void MeshLoader::loadModel(const std::string& path, std::vector<Vertex>& vertice
 
             indices.push_back(uniqueVertices[vertex]);
         }
+    }
+
+    // Output bounding box if requested
+    if (outBoundingBox) {
+        *outBoundingBox = bbox;
     }
 }
 

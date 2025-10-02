@@ -96,13 +96,83 @@ namespace impgine {
         if (onModified) onModified();
     }
 
+    void Camera::panCamera(float deltaX, float deltaY) {
+        // Calculate right and up vectors based on current view
+        glm::vec3 forward;
+        forward.x = sin(rotation.y) * cos(rotation.x);
+        forward.y = cos(rotation.y) * cos(rotation.x);
+        forward.z = -sin(rotation.x);
+
+        glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 0.0f, 1.0f)));
+        glm::vec3 up = glm::normalize(glm::cross(right, forward));
+
+        // Pan the camera based on screen space movement
+        const float panSpeed = 0.005f;
+        position -= right * deltaX * panSpeed;
+        position += up * deltaY * panSpeed;
+
+        if (onModified) onModified();
+    }
+
+    void Camera::zoomCamera(float delta) {
+        // Zoom by moving forward/backward along view direction
+        glm::vec3 forward;
+        forward.x = sin(rotation.y) * cos(rotation.x);
+        forward.y = cos(rotation.y) * cos(rotation.x);
+        forward.z = -sin(rotation.x);
+
+        const float zoomSpeed = 0.5f;
+        position += forward * delta * zoomSpeed;
+
+        if (onModified) onModified();
+    }
+
+    void Camera::orbitCamera(float deltaYaw, float deltaPitch, const glm::vec3& target) {
+        // Update rotation for orbit
+        rotation.y += deltaYaw;
+        rotation.x += deltaPitch;
+
+        // Clamp pitch
+        const float maxPitch = glm::radians(89.0f);
+        rotation.x = glm::clamp(rotation.x, -maxPitch, maxPitch);
+
+        // Calculate new position based on rotation and distance from target
+        float distance = glm::length(position - target);
+
+        glm::vec3 forward;
+        forward.x = sin(rotation.y) * cos(rotation.x);
+        forward.y = cos(rotation.y) * cos(rotation.x);
+        forward.z = -sin(rotation.x);
+
+        // Position camera at the specified distance from target, looking at it
+        position = target - forward * distance;
+
+        if (onModified) onModified();
+    }
+
+    void Camera::frameTarget(const glm::vec3& target, float distance) {
+        // Calculate direction from target to current camera position
+        glm::vec3 direction = glm::normalize(position - target);
+
+        // Position camera at specified distance from target
+        position = target + direction * distance;
+
+        // Calculate rotation to look at target
+        glm::vec3 forward = glm::normalize(target - position);
+        rotation.y = atan2(forward.x, forward.y);
+        rotation.x = -asin(forward.z);
+
+        updateViewMatrix();
+        if (onModified) onModified();
+    }
+
     void Camera::updateViewMatrix() {
         // Calculate the look direction from rotation
         glm::vec3 forward;
         forward.x = sin(rotation.y) * cos(rotation.x);
         forward.y = cos(rotation.y) * cos(rotation.x);
         forward.z = -sin(rotation.x);
-        
+
         glm::vec3 target = position + forward;
         viewMatrix = glm::lookAt(position, target, glm::vec3(0.0f, 0.0f, 1.0f));
         inverseViewMatrix = glm::inverse(viewMatrix);

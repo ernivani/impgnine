@@ -149,7 +149,7 @@ MeshGPUResources& ResourceManager::loadMeshResources(const std::string& modelPat
     }
 
     MeshGPUResources resources;
-    MeshLoader::loadModel(modelPath, resources.vertices, resources.indices);
+    MeshLoader::loadModel(modelPath, resources.vertices, resources.indices, &resources.boundingBox);
     createVertexBuffer(resources.vertices, resources.vertexBuffer, resources.vertexBufferMemory);
     createIndexBuffer(resources.indices, resources.indexBuffer, resources.indexBufferMemory);
     createTextureImage(texturePath, resources.textureImage, resources.textureImageMemory, resources.mipLevels);

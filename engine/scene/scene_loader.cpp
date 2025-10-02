@@ -158,7 +158,14 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
         std::string fullModelPath = project.getFullPath(pe.modelPath);
         std::string fullTexturePath = project.getFullPath(pe.texturePath);
 
-        reg.addComponent<impgine::MeshRenderer>(e, impgine::MeshRenderer{ std::make_shared<impgine::Mesh>(fullModelPath), std::make_shared<impgine::Texture2D>(fullTexturePath), pe.color });
+        reg.addComponent<impgine::MeshRenderer>(e, impgine::MeshRenderer{
+            std::make_shared<impgine::Mesh>(fullModelPath),
+            std::make_shared<impgine::Texture2D>(fullTexturePath),
+            pe.color,
+            impgine::AABB{},  // Will be filled during resource loading
+            {},  // vertices - will be filled during resource loading
+            {}   // indices - will be filled during resource loading
+        });
     }
 
     // Second pass: establish hierarchy relationships

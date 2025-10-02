@@ -94,6 +94,8 @@ namespace impgine {
         public: void markSceneModified() { sceneModified = true; }
         public: bool isSceneModified() const { return sceneModified; }
         public: void saveCurrentScene();
+        public: void markHierarchyNeedsRebuild() { needsHierarchyRebuild = true; }
+        public: void markInspectorNeedsRebuild() { rebuildInspectorUI(); }
         private: void showUnsavedChangesDialog();
         private: void showLoadingModal(bool show, float progress = 0.0f);
         private: void updateLoadingProgress(float progress);

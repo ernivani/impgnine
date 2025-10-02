@@ -25,6 +25,10 @@ InputManager::InputManager(Window* window, Camera* camera, Engine* engine)
 }
 
 void InputManager::processInput(float deltaTime) {
+    // Track modifier keys
+    shiftPressed = window->isKeyPressed(GLFW_KEY_LEFT_SHIFT) || window->isKeyPressed(GLFW_KEY_RIGHT_SHIFT);
+    altPressed = window->isKeyPressed(GLFW_KEY_LEFT_ALT) || window->isKeyPressed(GLFW_KEY_RIGHT_ALT);
+
     // ESC to release mouse capture (always check this)
     if (window->isKeyPressed(GLFW_KEY_ESCAPE)) {
         if (mouseCaptured) {
@@ -33,12 +37,45 @@ void InputManager::processInput(float deltaTime) {
         }
     }
 
-    // Only process camera movement if mouse is captured (viewport is focused)
-    if (!mouseCaptured) return;
+    // Arrow keys for panning (always available)
+    const float panSpeed = 5.0f * deltaTime;
+    if (window->isKeyPressed(GLFW_KEY_UP)) {
+        camera->panCamera(0, panSpeed * 100.0f);
+        camera->updateViewMatrix();
+    }
+    if (window->isKeyPressed(GLFW_KEY_DOWN)) {
+        camera->panCamera(0, -panSpeed * 100.0f);
+        camera->updateViewMatrix();
+    }
+    if (window->isKeyPressed(GLFW_KEY_LEFT)) {
+        camera->panCamera(-panSpeed * 100.0f, 0);
+        camera->updateViewMatrix();
+    }
+    if (window->isKeyPressed(GLFW_KEY_RIGHT)) {
+        camera->panCamera(panSpeed * 100.0f, 0);
+        camera->updateViewMatrix();
+    }
 
-    const float moveSpeed = 5.0f; // units per second
+    // F key to frame selected object
+    if (window->isKeyPressed(GLFW_KEY_F) && engine && engine->selectedEntity != INVALID_ENTITY) {
+        auto& registry = ECSRegistry::getRegistry();
+        try {
+            auto& transform = registry.getComponent<Transform>(engine->selectedEntity);
+            camera->frameTarget(transform.position, 5.0f);
+        } catch (...) {
+            // Entity doesn't have a Transform component
+        }
+    }
 
-    // WASD movement
+    // Only process WASD movement if right-click is held (flythrough mode)
+    if (!rightButtonPressed) return;
+
+    float moveSpeed = 5.0f; // units per second
+    if (shiftPressed) {
+        moveSpeed *= 2.0f; // Faster movement with Shift
+    }
+
+    // WASD movement (flythrough mode with right-click)
     if (window->isKeyPressed(GLFW_KEY_W)) {
         camera->moveForward(moveSpeed * deltaTime);
     }
@@ -52,17 +89,18 @@ void InputManager::processInput(float deltaTime) {
         camera->moveRight(moveSpeed * deltaTime);
     }
 
-    // Space and Shift for up/down movement
-    if (window->isKeyPressed(GLFW_KEY_SPACE)) {
+    // Q/E for up/down movement (flythrough mode)
+    if (window->isKeyPressed(GLFW_KEY_Q) || window->isKeyPressed(GLFW_KEY_SPACE)) {
         camera->moveUp(moveSpeed * deltaTime);
     }
-    if (window->isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
+    if (window->isKeyPressed(GLFW_KEY_E) || window->isKeyPressed(GLFW_KEY_LEFT_CONTROL)) {
         camera->moveDown(moveSpeed * deltaTime);
     }
 }
 
 void InputManager::handleMouseMovement() {
-    if (!mouseCaptured) return;
+    // Handle mouse movement for various camera modes
+    if (currentMode == CameraMode::None) return;
 
     double xpos, ypos;
     window->getCursorPos(&xpos, &ypos);
@@ -71,17 +109,50 @@ void InputManager::handleMouseMovement() {
         lastMouseX = xpos;
         lastMouseY = ypos;
         firstMouse = false;
+        return;
     }
 
     double xoffset = xpos - lastMouseX;
-    double yoffset = ypos - lastMouseY; // Normal direction for intuitive mouse look
+    double yoffset = ypos - lastMouseY;
 
     lastMouseX = xpos;
     lastMouseY = ypos;
 
-    const float sensitivity = 0.002f; // Adjust as needed
-    camera->rotateYaw(static_cast<float>(xoffset * sensitivity));
-    camera->rotatePitch(static_cast<float>(yoffset * sensitivity));
+    const float sensitivity = 0.002f;
+
+    switch (currentMode) {
+        case CameraMode::Rotate:
+            // Right-click drag: rotate view
+            camera->rotateYaw(static_cast<float>(xoffset * sensitivity));
+            camera->rotatePitch(static_cast<float>(yoffset * sensitivity));
+            camera->updateViewMatrix();
+            break;
+
+        case CameraMode::Pan:
+            // Middle-click drag: pan view
+            camera->panCamera(static_cast<float>(xoffset), static_cast<float>(-yoffset));
+            camera->updateViewMatrix();
+            break;
+
+        case CameraMode::Orbit:
+            // Alt + Left-click: orbit around target
+            camera->orbitCamera(
+                static_cast<float>(xoffset * sensitivity),
+                static_cast<float>(yoffset * sensitivity),
+                orbitTarget
+            );
+            camera->updateViewMatrix();
+            break;
+
+        case CameraMode::Zoom:
+            // Alt + Right-click: smooth zoom
+            camera->zoomCamera(static_cast<float>(-yoffset * 0.1f));
+            camera->updateViewMatrix();
+            break;
+
+        default:
+            break;
+    }
 }
 
 void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float mouseX, float mouseY) {
@@ -199,19 +270,73 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
     // Check if mouse is over any UI panel
     bool mouseOverUI = uiRenderer->getLayout().isPointOverUI(mouseX, mouseY, uiWindows);
 
-    // Handle mouse capture for 3D viewport navigation
-    if (!mouseCaptured) {
-        if (window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-            if (!mouseOverUI) {
-                mouseCaptured = true;
-                window->setCursorInputMode(GLFW_CURSOR_DISABLED);
+    // Track mouse button states for viewport navigation
+    leftButtonPressed = window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
+    rightButtonPressed = window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT);
+    middleButtonPressed = window->isMouseButtonPressed(GLFW_MOUSE_BUTTON_MIDDLE);
 
-                // Center cursor
-                int fbw = 0, fbh = 0;
-                window->getFramebufferSize(&fbw, &fbh);
-                window->setCursorPos(fbw / 2.0, fbh / 2.0);
+    // Determine camera mode based on mouse buttons and modifiers
+    if (!mouseOverUI) {
+        if (altPressed && leftButtonPressed) {
+            // Alt + Left-click: Orbit
+            if (currentMode == CameraMode::None) {
+                currentMode = CameraMode::Orbit;
+                // Set orbit target to selected entity or scene center
+                if (engine && engine->selectedEntity != INVALID_ENTITY) {
+                    auto& registry = ECSRegistry::getRegistry();
+                    try {
+                        auto& transform = registry.getComponent<Transform>(engine->selectedEntity);
+                        orbitTarget = transform.position;
+                    } catch (...) {
+                        // Entity doesn't have a Transform component, use scene center
+                        orbitTarget = glm::vec3(0.0f);
+                    }
+                } else {
+                    orbitTarget = glm::vec3(0.0f);
+                }
                 firstMouse = true;
             }
+        } else if (altPressed && rightButtonPressed) {
+            // Alt + Right-click: Zoom
+            if (currentMode == CameraMode::None) {
+                currentMode = CameraMode::Zoom;
+                firstMouse = true;
+            }
+        } else if (rightButtonPressed) {
+            // Right-click: Rotate (flythrough mode)
+            if (currentMode == CameraMode::None) {
+                currentMode = CameraMode::Rotate;
+                firstMouse = true;
+            }
+        } else if (middleButtonPressed) {
+            // Middle-click: Pan
+            if (currentMode == CameraMode::None) {
+                currentMode = CameraMode::Pan;
+                firstMouse = true;
+            }
+        } else if (leftButtonPressed && !altPressed) {
+            // Left-click without Alt: Pick entity in viewport
+            // Only pick on initial click (when mode transitions from None)
+            if (currentMode == CameraMode::None) {
+                Entity pickedEntity = pickEntityAtScreenPosition(mouseX, mouseY, uiRenderer, uiWindows);
+                if (pickedEntity != INVALID_ENTITY) {
+                    engine->selectedEntity = pickedEntity;
+                    if (uiRenderer) uiRenderer->setSelectedEntity(pickedEntity);
+                    // Rebuild UIs to show selected entity
+                    engine->markHierarchyNeedsRebuild();
+                    engine->markInspectorNeedsRebuild();
+                }
+                // Don't set camera mode, allow single clicks for selection
+            }
+        } else {
+            // No mouse buttons pressed: reset mode
+            currentMode = CameraMode::None;
+            firstMouse = true;
+        }
+    } else {
+        // Mouse over UI: reset camera mode
+        if (!leftButtonPressed && !rightButtonPressed && !middleButtonPressed) {
+            currentMode = CameraMode::None;
         }
     }
 }
@@ -595,6 +720,191 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
             engine->draggedEntity = INVALID_ENTITY;
         }
     }
+}
+
+void InputManager::scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+    (void)xoffset;
+
+    auto appPtr = glfwGetWindowUserPointer(window);
+    if (!appPtr) return;
+
+    auto* engine = static_cast<impgine::Engine*>(appPtr);
+    auto& camera = engine->getCamera();
+
+    // Zoom camera with scroll wheel
+    camera.zoomCamera(static_cast<float>(yoffset));
+    camera.updateViewMatrix();
+}
+
+Entity InputManager::pickEntityAtScreenPosition(float screenX, float screenY, UIRenderer* uiRenderer, std::vector<UIWindow>& ) {
+    if (!uiRenderer || !camera || !engine) {
+        return INVALID_ENTITY;
+    }
+
+    // Get viewport rect from UI layout
+    glm::vec4 viewportRect = uiRenderer->getLayout().getViewportRect();
+
+    // Get framebuffer height to convert viewport Y from top-origin to bottom-origin
+    int fbWidth, fbHeight;
+    window->getFramebufferSize(&fbWidth, &fbHeight);
+
+    // viewportRect uses top-left origin (Y=0 at top)
+    // screenY uses bottom-left origin (Y=0 at bottom, from handleUIInput line 225)
+    // Convert viewportRect.y from top-origin to bottom-origin
+    float viewportBottomY = fbHeight - viewportRect.y - viewportRect.w;
+
+    // Convert screen coordinates to viewport-relative coordinates
+    float viewportX = screenX - viewportRect.x;
+    float viewportY = screenY - viewportBottomY;
+
+    // Check if click is within viewport
+    if (viewportX < 0 || viewportX > viewportRect.z || viewportY < 0 || viewportY > viewportRect.w) {
+        return INVALID_ENTITY;
+    }
+
+    // Normalize to [0, 1] where 0 = bottom, 1 = top
+    float normalizedX = viewportX / viewportRect.z;
+    float normalizedY = viewportY / viewportRect.w;
+
+    // Convert to NDC [-1, 1] where -1 = bottom, +1 = top
+    float ndcX = normalizedX * 2.0f - 1.0f;
+    float ndcY = normalizedY * 2.0f - 1.0f;
+
+    // Get camera matrices
+    glm::mat4 projectionMatrix = camera->getProjection();
+    glm::mat4 viewMatrix = camera->getView();
+    glm::mat4 invProjection = glm::inverse(projectionMatrix);
+    glm::mat4 invView = glm::inverse(viewMatrix);
+
+    // Create ray in NDC space (two points: near and far plane)
+    glm::vec4 rayStartNDC = glm::vec4(ndcX, ndcY, -1.0f, 1.0f);  // Near plane
+    glm::vec4 rayEndNDC = glm::vec4(ndcX, ndcY, 1.0f, 1.0f);     // Far plane
+
+    // Transform to world space
+    glm::vec4 rayStartWorld = invView * invProjection * rayStartNDC;
+    glm::vec4 rayEndWorld = invView * invProjection * rayEndNDC;
+
+    // Perspective divide
+    rayStartWorld /= rayStartWorld.w;
+    rayEndWorld /= rayEndWorld.w;
+
+    // Calculate ray origin and direction
+    glm::vec3 rayOrigin = glm::vec3(rayStartWorld);
+    glm::vec3 rayEnd = glm::vec3(rayEndWorld);
+    glm::vec3 rayDirection = glm::normalize(rayEnd - rayOrigin);
+
+    // Ray-entity intersection test using AABB (Axis-Aligned Bounding Box)
+    auto& registry = ECSRegistry::getRegistry();
+    Entity closestEntity = INVALID_ENTITY;
+    float closestDistance = std::numeric_limits<float>::max();
+
+    for (Entity entity : registry.getEntities()) {
+        // Skip inactive entities
+        if (!registry.isActiveInHierarchy(entity)) continue;
+
+        // Check if entity has Transform and MeshRenderer
+        try {
+            registry.getComponent<Transform>(entity);
+            auto& meshRenderer = registry.getComponent<MeshRenderer>(entity);
+
+            // Get world matrix
+            glm::mat4 worldMatrix = Transform::getWorldMatrix(entity);
+
+            // Transform local-space AABB to world-space AABB
+            // Get 8 corners of local AABB and transform them
+            glm::vec3 localMin = meshRenderer.boundingBox.min;
+            glm::vec3 localMax = meshRenderer.boundingBox.max;
+
+            // Transform all 8 corners to world space
+            glm::vec3 corners[8] = {
+                glm::vec3(worldMatrix * glm::vec4(localMin.x, localMin.y, localMin.z, 1.0f)),
+                glm::vec3(worldMatrix * glm::vec4(localMax.x, localMin.y, localMin.z, 1.0f)),
+                glm::vec3(worldMatrix * glm::vec4(localMin.x, localMax.y, localMin.z, 1.0f)),
+                glm::vec3(worldMatrix * glm::vec4(localMax.x, localMax.y, localMin.z, 1.0f)),
+                glm::vec3(worldMatrix * glm::vec4(localMin.x, localMin.y, localMax.z, 1.0f)),
+                glm::vec3(worldMatrix * glm::vec4(localMax.x, localMin.y, localMax.z, 1.0f)),
+                glm::vec3(worldMatrix * glm::vec4(localMin.x, localMax.y, localMax.z, 1.0f)),
+                glm::vec3(worldMatrix * glm::vec4(localMax.x, localMax.y, localMax.z, 1.0f))
+            };
+
+            // Find AABB that encompasses all transformed corners
+            glm::vec3 aabbMin(std::numeric_limits<float>::max());
+            glm::vec3 aabbMax(std::numeric_limits<float>::lowest());
+            for (int i = 0; i < 8; ++i) {
+                aabbMin = glm::min(aabbMin, corners[i]);
+                aabbMax = glm::max(aabbMax, corners[i]);
+            }
+
+            // Ray-AABB intersection (slab method) - fast early rejection
+            glm::vec3 invDir = 1.0f / rayDirection;
+            glm::vec3 t0s = (aabbMin - rayOrigin) * invDir;
+            glm::vec3 t1s = (aabbMax - rayOrigin) * invDir;
+
+            glm::vec3 tsmaller = glm::min(t0s, t1s);
+            glm::vec3 tbigger = glm::max(t0s, t1s);
+
+            float tmin = glm::max(glm::max(tsmaller.x, tsmaller.y), tsmaller.z);
+            float tmax = glm::min(glm::min(tbigger.x, tbigger.y), tbigger.z);
+
+            // Check if ray intersects AABB
+            if (tmax >= tmin && tmax > 0.0f) {
+                // AABB hit - now test individual triangles for precise intersection
+                const auto& vertices = meshRenderer.vertices;
+                const auto& indices = meshRenderer.indices;
+
+                if (!vertices.empty() && !indices.empty()) {
+                    // Test each triangle
+                    for (size_t i = 0; i + 2 < indices.size(); i += 3) {
+                        // Get triangle vertices in local space
+                        glm::vec3 v0 = vertices[indices[i]];
+                        glm::vec3 v1 = vertices[indices[i + 1]];
+                        glm::vec3 v2 = vertices[indices[i + 2]];
+
+                        // Transform to world space
+                        glm::vec3 wv0 = glm::vec3(worldMatrix * glm::vec4(v0, 1.0f));
+                        glm::vec3 wv1 = glm::vec3(worldMatrix * glm::vec4(v1, 1.0f));
+                        glm::vec3 wv2 = glm::vec3(worldMatrix * glm::vec4(v2, 1.0f));
+
+                        // Möller-Trumbore ray-triangle intersection algorithm
+                        glm::vec3 edge1 = wv1 - wv0;
+                        glm::vec3 edge2 = wv2 - wv0;
+                        glm::vec3 h = glm::cross(rayDirection, edge2);
+                        float a = glm::dot(edge1, h);
+
+                        // Check if ray is parallel to triangle
+                        if (a > -0.00001f && a < 0.00001f)
+                            continue;
+
+                        float f = 1.0f / a;
+                        glm::vec3 s = rayOrigin - wv0;
+                        float u = f * glm::dot(s, h);
+
+                        if (u < 0.0f || u > 1.0f)
+                            continue;
+
+                        glm::vec3 q = glm::cross(s, edge1);
+                        float v = f * glm::dot(rayDirection, q);
+
+                        if (v < 0.0f || u + v > 1.0f)
+                            continue;
+
+                        // Compute t to find intersection point
+                        float t = f * glm::dot(edge2, q);
+
+                        if (t > 0.00001f && t < closestDistance) {
+                            closestDistance = t;
+                            closestEntity = entity;
+                        }
+                    }
+                }
+            }
+        } catch (...) {
+            // Entity doesn't have required components
+            continue;
+        }
+    }
+
+    return closestEntity;
 }
 
 } // namespace impgine

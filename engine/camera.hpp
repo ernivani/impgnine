@@ -34,7 +34,13 @@ namespace impgine {
         
         void rotateYaw(float angle);   // Look left/right
         void rotatePitch(float angle); // Look up/down
-        
+
+        // Mouse-based camera controls
+        void panCamera(float deltaX, float deltaY);     // Pan with mouse drag
+        void zoomCamera(float delta);                   // Zoom in/out
+        void orbitCamera(float deltaYaw, float deltaPitch, const glm::vec3& target);  // Orbit around point
+        void frameTarget(const glm::vec3& target, float distance); // Focus on target
+
         // Update view matrix after movement/rotation
         void updateViewMatrix();
 

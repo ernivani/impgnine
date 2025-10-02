@@ -16,10 +16,29 @@ extern const Entity INVALID_ENTITY;
 
 namespace impgine {
 
+    // Axis-Aligned Bounding Box
+    struct AABB {
+        glm::vec3 min {std::numeric_limits<float>::max()};
+        glm::vec3 max {std::numeric_limits<float>::lowest()};
+
+        void expand(const glm::vec3& point) {
+            min = glm::min(min, point);
+            max = glm::max(max, point);
+        }
+
+        glm::vec3 center() const {
+            return (min + max) * 0.5f;
+        }
+
+        glm::vec3 extents() const {
+            return (max - min) * 0.5f;
+        }
+    };
+
     // Forward declarations for component pointer types
     class Texture2D{
         public:
-        std::string texturePath; 
+        std::string texturePath;
         glm::vec3 color {1.0f, 1.0f, 1.0f};
         Texture2D() = default;
         explicit Texture2D(const std::string& path)
@@ -27,12 +46,13 @@ namespace impgine {
         Texture2D(const std::string& path, const glm::vec3& tint)
             : texturePath(path), color(tint) {}
     };
-    
+
     class Mesh {
         public:
-        std::string modelPath;  
-        std::string texturePath; 
+        std::string modelPath;
+        std::string texturePath;
         glm::vec3 color {1.0f, 1.0f, 1.0f};
+        AABB boundingBox;  // Local-space bounding box
         Mesh() = default;
         explicit Mesh(const std::string& model)
             : modelPath(model) {}
@@ -78,6 +98,9 @@ namespace impgine {
         std::shared_ptr<Mesh> mesh;
         std::shared_ptr<Texture2D> texture;
         glm::vec3 color{ 1.0f, 1.0f, 1.0f };
+        AABB boundingBox;  // Local-space bounding box (updated when mesh is loaded)
+        std::vector<glm::vec3> vertices;  // Local-space vertices for precise picking
+        std::vector<uint32_t> indices;     // Triangle indices for precise picking
     };
 
 

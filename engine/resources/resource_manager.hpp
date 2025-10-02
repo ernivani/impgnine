@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 #include "../backend/pipeline.hpp"
+#include "../ECS/components.hpp"
 
 namespace impgine {
 
@@ -21,6 +22,7 @@ struct MeshGPUResources {
     VkSampler textureSampler;
     uint32_t mipLevels;
     std::vector<VkDescriptorSet> descriptorSets;
+    AABB boundingBox;  // Bounding box in local space
 };
 
 class ResourceManager {

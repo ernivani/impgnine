@@ -35,6 +35,9 @@ Engine::Engine() {
     glfwSetMouseButtonCallback(window->getGLFWWindow(), mouseButtonCallback);
     glfwSetCharCallback(window->getGLFWWindow(), characterCallback);
     glfwSetKeyCallback(window->getGLFWWindow(), keyCallback);
+    glfwSetScrollCallback(window->getGLFWWindow(), [](GLFWwindow* w, double x, double y) {
+        InputManager::scrollCallback(w, x, y);
+    });
     glfwSetWindowCloseCallback(window->getGLFWWindow(), windowCloseCallback);
 
     // Set up camera modification callback
@@ -556,39 +559,6 @@ void Engine::rebuildInspectorUI() {
         // No MeshRenderer component
     }
 
-    // Tag section
-    try {
-        const auto& tag = registry.getComponent<Tag>(selected);
-
-        auto tagTitle = std::make_shared<UILabel>();
-        tagTitle->text = "Tag";
-        tagTitle->position = glm::vec2(10.0f, y);
-        tagTitle->textColor = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
-        inspectorWindow.addComponent(tagTitle);
-        y += 30.0f;
-
-        auto tagField = std::make_shared<UIInputField>();
-        tagField->position = glm::vec2(20.0f, y);
-        tagField->size = glm::vec2(inspectorWindow.getContentSize().x - 40.0f, 28.0f);
-        tagField->backgroundColor = glm::vec4(0.18f, 0.18f, 0.2f, 1.0f);
-        tagField->focusedColor = glm::vec4(0.22f, 0.22f, 0.25f, 1.0f);
-        tagField->hoverColor = glm::vec4(0.2f, 0.2f, 0.22f, 1.0f);
-        tagField->borderWidth = 1.0f;
-        tagField->padding = 6.0f;
-        tagField->text = tag.tag;
-        tagField->onCommit = [this, selected](const std::string& s){
-            auto& r = ECSRegistry::getRegistry();
-            auto& t = r.getComponent<Tag>(selected);
-            t.tag = s;
-            markSceneModified();
-            // Rebuild hierarchy to show updated name
-            initializeUnityLayout();
-        };
-        inspectorWindow.addComponent(tagField);
-        y += 38.0f;
-    } catch (...) {
-        // No Tag component
-    }
 
     // Add Component button
     y += 10.0f;
@@ -647,7 +617,15 @@ void Engine::loadScene(const std::string& scenePath) {
             std::string texturePath = meshRenderer.texture ? meshRenderer.texture->texturePath : "";
 
             // Load mesh resources using ResourceManager
-            resourceManager->loadMeshResources(modelPath, texturePath);
+            auto& gpuResources = resourceManager->loadMeshResources(modelPath, texturePath);
+            // Copy bounding box and vertex data from GPU resources to MeshRenderer for picking
+            meshRenderer.boundingBox = gpuResources.boundingBox;
+            meshRenderer.vertices.clear();
+            meshRenderer.vertices.reserve(gpuResources.vertices.size());
+            for (const auto& v : gpuResources.vertices) {
+                meshRenderer.vertices.push_back(v.pos);
+            }
+            meshRenderer.indices = gpuResources.indices;
             entityCount++;
 
             // Progress from 25% to 60%
@@ -1345,7 +1323,10 @@ void Engine::rebuildHierarchyUI() {
         reg.addComponent<MeshRenderer>(newEntity, MeshRenderer{
             std::make_shared<Mesh>(defaultModel),
             std::make_shared<Texture2D>(defaultTexture),
-            glm::vec3(1.0f)
+            glm::vec3(1.0f),
+            AABB{},  // Will be filled during resource loading
+            {},  // vertices - will be filled during resource loading
+            {}   // indices - will be filled during resource loading
         });
 
         selectedEntity = newEntity;

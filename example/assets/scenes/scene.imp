@@ -1,14 +1,14 @@
 %IMP 1.0
 Camera:
-  position: {x: 37.1539, y: -12.1109, z: 12.1203}
-  rotation: {x: 0.331906, y: -1.03772, z: 0}
+  position: {x: 18.4133, y: -4.39603, z: 5.80964}
+  rotation: {x: 0.398096, y: -0.857948, z: 0}
 --- !imp!Entity
 name: VikingRoom
-active: false
+active: true
 Transform:
   position: {x: 1, y: 0, z: 0}
   rotation: {x: 0, y: 0, z: 0}
-  scale: {x: 10, y: 10, z: 10}
+  scale: {x: 1, y: 1, z: 1}
 MeshRenderer:
   modelPath: assets/models/viking_room.obj
   texturePath: assets/textures/viking_room.png
@@ -17,9 +17,9 @@ MeshRenderer:
 name: Airplane1
 active: true
 Transform:
-  position: {x: 10, y: 10, z: 0}
-  rotation: {x: 1.5, y: 0, z: 0}
-  scale: {x: 1, y: 1, z: 1}
+  position: {x: 0, y: 10, z: 0}
+  rotation: {x: 0, y: 0, z: 0}
+  scale: {x: 0.1, y: 0.1, z: 0.1}
 MeshRenderer:
   modelPath: assets/models/piper_pa18.obj
   texturePath: assets/textures/viking_room.png
@@ -30,7 +30,7 @@ active: true
 Transform:
   position: {x: 20, y: 10, z: 0}
   rotation: {x: 1.5, y: 0, z: 0}
-  scale: {x: 1, y: 1, z: 1}
+  scale: {x: 0.1, y: 0.1, z: 0.1}
 MeshRenderer:
   modelPath: assets/models/piper_pa18.obj
   texturePath: assets/textures/viking_room.png
@@ -41,7 +41,7 @@ active: true
 Transform:
   position: {x: 30, y: 10, z: 0}
   rotation: {x: 1.5, y: 0, z: 0}
-  scale: {x: 1, y: 1, z: 1}
+  scale: {x: 0.1, y: 0.1, z: 0.1}
 MeshRenderer:
   modelPath: assets/models/viking_room.obj
   texturePath: assets/textures/viking_room.png
@@ -50,7 +50,7 @@ MeshRenderer:
 name: entity
 active: true
 Transform:
-  position: {x: 110, y: 10, z: 10}
+  position: {x: 11, y: 11, z: 1}
   rotation: {x: 0, y: 0, z: 0}
   scale: {x: 1, y: 1, z: 1}
 MeshRenderer:
@@ -58,10 +58,10 @@ MeshRenderer:
   texturePath: assets/textures/viking_room.png
   color: {x: 1, y: 1, z: 1}
 --- !imp!Entity
-name: zueafhaz
+name: entity_to_hit
 active: true
 Transform:
-  position: {x: 50, y: 50, z: 0}
+  position: {x: 5, y: 5, z: 0}
   rotation: {x: 0, y: 0, z: 0}
   scale: {x: 1.5, y: 1.5, z: 1.5}
 MeshRenderer:
