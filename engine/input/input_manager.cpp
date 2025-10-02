@@ -8,9 +8,20 @@ InputManager::InputManager(Window* window, Camera* camera)
 }
 
 void InputManager::processInput(float deltaTime) {
+    // ESC to release mouse capture (always check this)
+    if (window->isKeyPressed(GLFW_KEY_ESCAPE)) {
+        if (mouseCaptured) {
+            mouseCaptured = false;
+            window->setCursorInputMode(GLFW_CURSOR_NORMAL);
+        }
+    }
+
+    // Only process camera movement if mouse is captured (viewport is focused)
+    if (!mouseCaptured) return;
+
     const float moveSpeed = 5.0f; // units per second
 
-    // WASD movement (using ZQSD for AZERTY keyboards, but we'll use WASD)
+    // WASD movement
     if (window->isKeyPressed(GLFW_KEY_W)) {
         camera->moveForward(moveSpeed * deltaTime);
     }
@@ -30,14 +41,6 @@ void InputManager::processInput(float deltaTime) {
     }
     if (window->isKeyPressed(GLFW_KEY_LEFT_SHIFT)) {
         camera->moveDown(moveSpeed * deltaTime);
-    }
-
-    // ESC to release mouse capture
-    if (window->isKeyPressed(GLFW_KEY_ESCAPE)) {
-        if (mouseCaptured) {
-            mouseCaptured = false;
-            window->setCursorInputMode(GLFW_CURSOR_NORMAL);
-        }
     }
 }
 
