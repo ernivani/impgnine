@@ -142,4 +142,95 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
     }
 }
 
+bool SceneLoader::loadCameraFromScene(const std::string& scenePath, glm::vec3& outPos, glm::vec3& outRot) {
+    std::ifstream file(scenePath);
+    if (!file.is_open()) return false;
+
+    auto trim = [](std::string s) {
+        size_t a = s.find_first_not_of(" \t\r\n");
+        size_t b = s.find_last_not_of(" \t\r\n");
+        if (a == std::string::npos) return std::string();
+        return s.substr(a, b - a + 1);
+    };
+
+    auto parseObjVec3 = [&](const std::string& obj) -> glm::vec3 {
+        glm::vec3 out{0.0f};
+        std::string s = obj;
+        if (!s.empty() && s.front() == '{' && s.back() == '}') s = s.substr(1, s.size()-2);
+        std::stringstream ss2(s);
+        std::string part;
+        while (std::getline(ss2, part, ',')) {
+            auto colon = part.find(':');
+            if (colon == std::string::npos) continue;
+            auto k = trim(part.substr(0, colon));
+            auto v = trim(part.substr(colon+1));
+            float f = std::stof(v);
+            if (k == "x") out.x = f; else if (k == "y") out.y = f; else if (k == "z") out.z = f;
+        }
+        return out;
+    };
+
+    std::string line; bool inCamera = false;
+    while (std::getline(file, line)) {
+        line = trim(line);
+        if (line == "Camera:") { inCamera = true; continue; }
+        if (line.empty() || line.back() == ':') { inCamera = false; }
+        if (!inCamera) continue;
+
+        auto sep = line.find(':');
+        if (sep == std::string::npos) continue;
+        std::string key = trim(line.substr(0, sep));
+        std::string value = trim(line.substr(sep + 1));
+        if (key == "position") outPos = parseObjVec3(value);
+        else if (key == "rotation") outRot = parseObjVec3(value);
+    }
+    return true;
+}
+
+bool SceneLoader::saveScene(const std::string& scenePath, const ProjectSettings& project, const Camera& camera, ECSRegistry& registry) {
+    std::ofstream file(scenePath);
+    if (!file.is_open()) return false;
+
+    auto writeVec3 = [&](const char* name, const glm::vec3& v){
+        file << "  " << name << ": {x: " << v.x << ", y: " << v.y << ", z: " << v.z << "}\n";
+    };
+
+    // Header
+    file << "%IMP 1.0\n";
+
+    // Camera block
+    file << "Camera:\n";
+    writeVec3("position", camera.getPosition());
+    writeVec3("rotation", camera.getRotation());
+
+    // Entities
+    for (auto e : registry.getEntities()) {
+        file << "--- !imp!Entity\n";
+        try {
+            const auto& tag = registry.getComponent<Tag>(e);
+            file << "name: " << tag.tag << "\n";
+        } catch (...) {}
+
+        try {
+            const auto& t = registry.getComponent<Transform>(e);
+            file << "Transform:\n";
+            writeVec3("position", t.position);
+            writeVec3("rotation", t.rotation);
+            writeVec3("scale", t.scale);
+        } catch (...) {}
+
+        try {
+            const auto& mr = registry.getComponent<MeshRenderer3D>(e);
+            file << "MeshRenderer3D:\n";
+            // Persist paths relative to project root
+            std::string relModel = project.toRelativePath(mr.mesh->modelPath);
+            std::string relTex = mr.texture ? project.toRelativePath(mr.texture->texturePath) : "";
+            file << "  modelPath: " << relModel << "\n";
+            file << "  texturePath: " << relTex << "\n";
+            writeVec3("color", mr.color);
+        } catch (...) {}
+    }
+
+    return true;
+}
 } // namespace impgine

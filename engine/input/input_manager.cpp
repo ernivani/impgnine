@@ -1,5 +1,7 @@
 #include "input_manager.hpp"
 #include "../ui/UIComponents.hpp"
+#include "../scene/scene_loader.hpp"
+#include "../engine.hpp"
 #include <GLFW/glfw3.h>
 #include <iostream>
 
@@ -213,6 +215,20 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
 
     // On Mac, use Cmd for shortcuts; on other platforms, use Ctrl
     bool modifierHeld = cmdHeld || ctrlHeld;
+
+    // Save scene on Cmd/Ctrl+S
+    if ((cmdHeld || ctrlHeld) && key == GLFW_KEY_S) {
+        auto appPtr = glfwGetWindowUserPointer(window);
+        if (appPtr) {
+            auto& registry = ECSRegistry::getRegistry();
+            // Avoid needing Engine's private members by querying through Project singleton-like usage
+            // We know Engine set the window user pointer to itself; cast and access public members
+            impgine::Engine* app = static_cast<impgine::Engine*>(appPtr);
+            SceneLoader::saveScene(app->getProject().getFullPath(app->getProject().lastScene), app->getProject(), app->getCamera(), registry);
+            std::cout << "Scene saved." << std::endl;
+        }
+        return;
+    }
 
     // Find focused input field
     for (auto& uiWindow : uiWindows) {

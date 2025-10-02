@@ -28,6 +28,15 @@ struct ProjectSettings {
         return projectPath + "/" + relativePath;
     }
 
+    // Convert absolute paths back to project-relative if possible
+    std::string toRelativePath(const std::string& absolutePath) const {
+        // Normalize simple case: if it starts with projectPath + "/", strip it
+        if (absolutePath.rfind(projectPath + "/", 0) == 0) {
+            return absolutePath.substr(projectPath.size() + 1);
+        }
+        return absolutePath; // Already relative or external
+    }
+
     // Engine paths (standardized by engine)
     std::string getEnginePath() const { return projectPath + "/Engine"; }
     std::string getShadersPath() const { return projectPath + "/Engine/Shaders"; }

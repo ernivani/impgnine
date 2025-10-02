@@ -436,6 +436,16 @@ void Engine::loadScene(const std::string& scenePath) {
     // Use SceneLoader to load scene data into ECS
     SceneLoader::loadScene(scenePath, project);
 
+    // Load camera pose from scene if present
+    {
+        glm::vec3 camPos = camera.getPosition();
+        glm::vec3 camRot = camera.getRotation();
+        if (SceneLoader::loadCameraFromScene(scenePath, camPos, camRot)) {
+            camera.setViewYXZ(camPos, camRot);
+            camera.updateViewMatrix();
+        }
+    }
+
     // Load GPU resources for all entities with MeshRenderer3D components
     auto& reg = ECSRegistry::getRegistry();
     for (const auto& entity : reg.getEntities()) {
