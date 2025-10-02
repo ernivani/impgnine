@@ -79,7 +79,7 @@ namespace impgine {
 
             // Clip/scroll horizontally by adjusting starting character based on available width
             auto textRenderer = renderer.getTextRenderer();
-            size_t startIndex = input.scrollStart;
+            size_t startIndex = std::min(input.scrollStart, input.text.length());
             if (textRenderer) {
                 float scale = 0.5f;
                 float available = input.size.x - 2.0f * input.padding;
@@ -112,9 +112,9 @@ namespace impgine {
                     startIndex--; widthFromStartToCursor += adv;
                 }
             }
-            input.scrollStart = startIndex;
+            input.scrollStart = std::min(startIndex, input.text.length());
 
-            std::string visible = input.text.substr(startIndex);
+            std::string visible = input.text.substr(input.scrollStart);
             renderer.renderText(visible, textPos, 0.5f, input.textColor, verts);
         } else if (!input.placeholder.empty()) {
             renderer.renderText(input.placeholder, textPos, 0.5f, input.placeholderColor, verts);

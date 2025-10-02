@@ -44,11 +44,16 @@ namespace impgine {
             if (win.dockPosition == DockPosition::Top) hasTop = true;
         }
 
+        // Compute responsive panel sizes from ratios
+        currentLeftWidth = hasLeft ? static_cast<float>(windowWidth) * leftPanelRatio : 0.0f;
+        currentRightWidth = hasRight ? static_cast<float>(windowWidth) * rightPanelRatio : 0.0f;
+        currentBottomHeight = hasBottom ? static_cast<float>(windowHeight) * bottomPanelRatio : 0.0f;
+
         // Carve out space for panels from viewport
-        if (hasLeft) vpLeft += leftPanelWidth;
-        if (hasRight) vpRight -= rightPanelWidth;
+        if (hasLeft) vpLeft += currentLeftWidth;
+        if (hasRight) vpRight -= currentRightWidth;
         if (hasTop) vpTop += topPanelHeight;
-        if (hasBottom) vpBottom -= bottomPanelHeight;
+        if (hasBottom) vpBottom -= currentBottomHeight;
 
         // Store viewport rectangle
         viewportRect.x = vpLeft;
@@ -71,13 +76,13 @@ namespace impgine {
             case DockPosition::Left:
                 // Left side, full height
                 window.position = glm::vec2(0.0f, 0.0f);
-                window.size = glm::vec2(leftPanelWidth, winHeight);
+                window.size = glm::vec2(currentLeftWidth, winHeight);
                 break;
 
             case DockPosition::Right:
                 // Right side, full height
-                window.position = glm::vec2(winWidth - rightPanelWidth, 0.0f);
-                window.size = glm::vec2(rightPanelWidth, winHeight);
+                window.position = glm::vec2(winWidth - currentRightWidth, 0.0f);
+                window.size = glm::vec2(currentRightWidth, winHeight);
                 break;
 
             case DockPosition::Top:
@@ -89,7 +94,7 @@ namespace impgine {
             case DockPosition::Bottom:
                 // Bottom, between left and right panels
                 window.position = glm::vec2(viewportRect.x, 0.0f);
-                window.size = glm::vec2(viewportRect.z, bottomPanelHeight);
+                window.size = glm::vec2(viewportRect.z, currentBottomHeight);
                 break;
 
             case DockPosition::Center:
