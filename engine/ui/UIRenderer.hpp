@@ -57,6 +57,10 @@ namespace impgine {
         void renderText(const std::string& text, glm::vec2 position, float scale, glm::vec4 color, std::vector<UIVertex>& verts);
         void createDescriptorSets();
 
+        // Drawing helpers
+        void drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color);
+        void drawText(const std::string& text, const glm::vec2& position, const glm::vec4& color);
+
         // Interaction
         void handleMouseClick(double xpos, double ypos, std::vector<UIWindow>& windows);
         Entity getSelectedEntity() const { return selectedEntity; }
@@ -85,6 +89,9 @@ namespace impgine {
         std::unique_ptr<TextRenderer> textRenderer;
 
         Entity selectedEntity = INVALID_ENTITY;
+
+        // Current frame vertices (for building UI geometry)
+        std::vector<UIVertex> currentVertices;
     };
 
 } // namespace impgine

@@ -2,8 +2,12 @@
 
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
+#include <memory>
 
 namespace impgine {
+
+    struct UIComponent;
 
     enum class UIWindowType {
         SceneView,      // Central viewport with Vulkan rendering
@@ -63,6 +67,16 @@ namespace impgine {
         glm::vec2 getContentSize() const {
             return glm::vec2(size.x, size.y - titleBarHeight);
         }
+
+        // UI components
+        std::vector<std::shared_ptr<UIComponent>> components;
+
+        void addComponent(std::shared_ptr<UIComponent> component) {
+            components.push_back(component);
+        }
+
+        template<typename T>
+        std::shared_ptr<T> findComponent(const glm::vec2& localPoint);
     };
 
 } // namespace impgine

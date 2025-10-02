@@ -13,6 +13,7 @@
 #include "rendering/vulkan_init.hpp"
 #include "rendering/vulkan_resources.hpp"
 #include "rendering/vulkan_renderer.hpp"
+#include "ui/UIComponents.hpp"
 
 namespace impgine {
 
@@ -180,6 +181,57 @@ void Engine::initializeUnityLayout() {
     if (uiRenderer) {
         uiRenderer->getLayout().setWindowSize(ww, wh);
         uiRenderer->getLayout().computeLayout(uiWindows);
+    }
+
+    // Add example UI components to Inspector window (for demonstration)
+    {
+        // Find the inspector window (index 2 based on creation order)
+        if (uiWindows.size() > 2) {
+            auto& inspectorWindow = uiWindows[2];
+
+            // Add a button
+            auto button = std::make_shared<UIButton>();
+            button->label = "Test Button";
+            button->position = glm::vec2(10.0f, 200.0f);
+            button->size = glm::vec2(150.0f, 30.0f);
+            button->onClick = []() {
+                std::cout << "Button clicked!" << std::endl;
+            };
+            inspectorWindow.addComponent(button);
+
+            // Add an input field
+            auto input = std::make_shared<UIInputField>();
+            input->placeholder = "Enter name...";
+            input->position = glm::vec2(10.0f, 240.0f);
+            input->size = glm::vec2(150.0f, 25.0f);
+            inspectorWindow.addComponent(input);
+
+            // Add a checkbox
+            auto checkbox = std::make_shared<UICheckbox>();
+            checkbox->label = "Enable Feature";
+            checkbox->position = glm::vec2(10.0f, 280.0f);
+            checkbox->onToggle = [](bool checked) {
+                std::cout << "Checkbox " << (checked ? "checked" : "unchecked") << std::endl;
+            };
+            inspectorWindow.addComponent(checkbox);
+
+            // Add a slider
+            auto slider = std::make_shared<UISlider>();
+            slider->position = glm::vec2(10.0f, 320.0f);
+            slider->size = glm::vec2(180.0f, 20.0f);
+            slider->value = 0.75f;
+            slider->onValueChanged = [](float value) {
+                std::cout << "Slider value: " << value << std::endl;
+            };
+            inspectorWindow.addComponent(slider);
+
+            // Add a label
+            auto label = std::make_shared<UILabel>();
+            label->text = "UI Components Demo";
+            label->position = glm::vec2(10.0f, 170.0f);
+            label->textColor = glm::vec4(0.3f, 0.7f, 1.0f, 1.0f);
+            inspectorWindow.addComponent(label);
+        }
     }
 
     // Print UI layout information

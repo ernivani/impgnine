@@ -1,4 +1,5 @@
 #include "UIRenderer.hpp"
+#include "UIComponentRenderer.hpp"
 
 #include <cstring>
 #include <iostream>
@@ -158,6 +159,20 @@ namespace impgine {
             glm::vec2 contentPos = { p.x + w.borderWidth, p.y + w.borderWidth + w.titleBarHeight };
             glm::vec2 contentSize = { s.x - 2.0f * w.borderWidth, s.y - w.titleBarHeight - 2.0f * w.borderWidth };
             addQuad(contentPos, contentSize, w.backgroundColor);
+
+            // Render UI components in this window
+            currentVertices.clear();
+            for (const auto& comp : w.components) {
+                UIComponentRenderer::renderComponent(*this, *comp, contentPos);
+            }
+            // Convert currentVertices to NDC and add to verts
+            if (!currentVertices.empty()) {
+                std::cout << "Rendering " << currentVertices.size() << " component vertices in window '" << w.title << "'" << std::endl;
+                std::cout << "Content pos: (" << contentPos.x << ", " << contentPos.y << ")" << std::endl;
+            }
+            for (const auto& v : currentVertices) {
+                verts.push_back({ toNDC(v.pos), v.color, v.uv });
+            }
 
             // Render content based on window type
             if (w.type == UIWindowType::Hierarchy) {
@@ -435,6 +450,42 @@ namespace impgine {
                 }
             }
         }
+    }
+
+    void UIRenderer::drawRect(const glm::vec2& position, const glm::vec2& size, const glm::vec4& color) {
+        // Create 6 vertices for 2 triangles (a quad)
+        // Use UV (0,0) for all vertices to match existing UI rendering
+        UIVertex v0, v1, v2, v3;
+
+        v0.pos = glm::vec2(position.x, position.y);
+        v0.uv = glm::vec2(0.0f, 0.0f);
+        v0.color = color;
+
+        v1.pos = glm::vec2(position.x + size.x, position.y);
+        v1.uv = glm::vec2(0.0f, 0.0f);
+        v1.color = color;
+
+        v2.pos = glm::vec2(position.x + size.x, position.y + size.y);
+        v2.uv = glm::vec2(0.0f, 0.0f);
+        v2.color = color;
+
+        v3.pos = glm::vec2(position.x, position.y + size.y);
+        v3.uv = glm::vec2(0.0f, 0.0f);
+        v3.color = color;
+
+        // First triangle
+        currentVertices.push_back(v0);
+        currentVertices.push_back(v1);
+        currentVertices.push_back(v2);
+
+        // Second triangle
+        currentVertices.push_back(v0);
+        currentVertices.push_back(v2);
+        currentVertices.push_back(v3);
+    }
+
+    void UIRenderer::drawText(const std::string& text, const glm::vec2& position, const glm::vec4& color) {
+        renderText(text, position, 0.4f, color, currentVertices);
     }
 
 } // namespace impgine
