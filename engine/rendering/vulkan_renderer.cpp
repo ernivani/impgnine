@@ -123,10 +123,44 @@ void recordCommandBuffer(
         0, nullptr
     );
 
+    // Compute viewport/scissor for 3D scene (needed for both outline and main rendering)
+    VkViewport sceneViewport{};
+    VkRect2D sceneScissor{};
+
+    if (uiRenderer) {
+        // Ensure layout is up to date before using it (use framebuffer size for DPI correctness)
+        int ww = 0, wh = 0;
+        window->getFramebufferSize(&ww, &wh);
+        uiRenderer->getLayout().setWindowSize(ww, wh);
+        uiRenderer->getLayout().computeLayout(uiWindows);
+
+        glm::vec4 rect = uiRenderer->getLayout().getViewportRect();
+        sceneViewport.x = rect.x;
+        sceneViewport.y = rect.y;
+        sceneViewport.width = rect.z;
+        sceneViewport.height = rect.w;
+        sceneViewport.minDepth = 0.0f;
+        sceneViewport.maxDepth = 1.0f;
+
+        sceneScissor.offset = { static_cast<int32_t>(rect.x), static_cast<int32_t>(rect.y) };
+        sceneScissor.extent = { static_cast<uint32_t>(rect.z), static_cast<uint32_t>(rect.w) };
+    } else {
+        sceneViewport.x = 0.0f;
+        sceneViewport.y = 0.0f;
+        sceneViewport.width = static_cast<float>(swapChainExtent.width);
+        sceneViewport.height = static_cast<float>(swapChainExtent.height);
+        sceneViewport.minDepth = 0.0f;
+        sceneViewport.maxDepth = 1.0f;
+
+        sceneScissor.offset = {0, 0};
+        sceneScissor.extent = swapChainExtent;
+    }
+
     // Render outline mask if entity is selected (INVALID_ENTITY is max uint32)
     if (selectedEntity != INVALID_ENTITY && outlineResources && outlineResources->initialized) {
         renderOutlineMask(commandBuffer, *outlineResources, swapChainExtent,
-                         meshCachePtr, ecsRegistryPtr, selectedEntity, imageIndex);
+                         meshCachePtr, ecsRegistryPtr, selectedEntity, imageIndex,
+                         &sceneViewport, &sceneScissor);
     }
 
     VkRenderPassBeginInfo renderPassInfo{};
@@ -146,42 +180,8 @@ void recordCommandBuffer(
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     // Set viewport/scissor to UI center viewport so 3D scene renders only in middle
-    if (uiRenderer) {
-        // Ensure layout is up to date before using it (use framebuffer size for DPI correctness)
-        int ww = 0, wh = 0;
-        window->getFramebufferSize(&ww, &wh);
-        uiRenderer->getLayout().setWindowSize(ww, wh);
-        uiRenderer->getLayout().computeLayout(uiWindows);
-
-        glm::vec4 rect = uiRenderer->getLayout().getViewportRect();
-        VkViewport viewport{};
-        viewport.x = rect.x;
-        viewport.y = rect.y;
-        viewport.width = rect.z;
-        viewport.height = rect.w;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-        VkRect2D scissor{};
-        scissor.offset = { static_cast<int32_t>(rect.x), static_cast<int32_t>(rect.y) };
-        scissor.extent = { static_cast<uint32_t>(rect.z), static_cast<uint32_t>(rect.w) };
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-    } else {
-        VkViewport viewport{};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = static_cast<float>(swapChainExtent.width);
-        viewport.height = static_cast<float>(swapChainExtent.height);
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-        vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-        VkRect2D scissor{};
-        scissor.offset = {0, 0};
-        scissor.extent = swapChainExtent;
-        vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-    }
+    vkCmdSetViewport(commandBuffer, 0, 1, &sceneViewport);
+    vkCmdSetScissor(commandBuffer, 0, 1, &sceneScissor);
 
     pipeline->bind(commandBuffer);
 
@@ -224,7 +224,8 @@ void recordCommandBuffer(
 
     // Composite outline if entity is selected (INVALID_ENTITY is max uint32)
     if (selectedEntity != INVALID_ENTITY && outlineResources && outlineResources->initialized) {
-        compositeOutline(commandBuffer, *outlineResources, swapChainExtent, imageIndex);
+        compositeOutline(commandBuffer, *outlineResources, swapChainExtent, imageIndex,
+                        &sceneViewport, &sceneScissor);
     }
 
     // Draw UI on top

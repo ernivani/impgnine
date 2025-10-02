@@ -1,7 +1,7 @@
 %IMP 1.0
 Camera:
-  position: {x: 21.372, y: 3.77257, z: 4.51765}
-  rotation: {x: 0.24286, y: -1.37053, z: 0}
+  position: {x: 27.3339, y: -4.67185, z: 5.99058}
+  rotation: {x: 0.258297, y: -0.910226, z: 0}
 --- !imp!Entity
 name: VikingRoom
 Transform:
@@ -42,7 +42,3 @@ MeshRenderer:
   modelPath: assets/models/viking_room.obj
   texturePath: assets/textures/viking_room.png
   color: {x: 1, y: 1, z: 1}
-
-
-
-

@@ -758,7 +758,9 @@ void renderOutlineMask(
     void* meshCachePtr,
     void* ecsRegistryPtr,
     uint32_t selectedEntity,
-    uint32_t imageIndex) {
+    uint32_t imageIndex,
+    const VkViewport* viewport,
+    const VkRect2D* scissor) {
 
     auto& meshCache = *static_cast<std::unordered_map<std::string, MeshGPUResources>*>(meshCachePtr);
     ECSRegistry* registry = static_cast<ECSRegistry*>(ecsRegistryPtr);
@@ -778,6 +780,29 @@ void renderOutlineMask(
     renderPassInfo.pClearValues = clearValues.data();
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // Set viewport and scissor if provided
+    if (viewport) {
+        vkCmdSetViewport(commandBuffer, 0, 1, viewport);
+    } else {
+        VkViewport defaultViewport{};
+        defaultViewport.x = 0.0f;
+        defaultViewport.y = 0.0f;
+        defaultViewport.width = static_cast<float>(extent.width);
+        defaultViewport.height = static_cast<float>(extent.height);
+        defaultViewport.minDepth = 0.0f;
+        defaultViewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer, 0, 1, &defaultViewport);
+    }
+
+    if (scissor) {
+        vkCmdSetScissor(commandBuffer, 0, 1, scissor);
+    } else {
+        VkRect2D defaultScissor{};
+        defaultScissor.offset = {0, 0};
+        defaultScissor.extent = extent;
+        vkCmdSetScissor(commandBuffer, 0, 1, &defaultScissor);
+    }
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, resources.outlinePipeline);
 
@@ -828,10 +853,20 @@ void compositeOutline(
     VkCommandBuffer commandBuffer,
     const OutlineResources& resources,
     VkExtent2D extent,
-    uint32_t imageIndex) {
+    uint32_t imageIndex,
+    const VkViewport* viewport,
+    const VkRect2D* scissor) {
 
     if (!resources.initialized || resources.compositePipeline == VK_NULL_HANDLE) {
         return;
+    }
+
+    // Set viewport and scissor if provided (to match the 3D scene viewport)
+    if (viewport) {
+        vkCmdSetViewport(commandBuffer, 0, 1, viewport);
+    }
+    if (scissor) {
+        vkCmdSetScissor(commandBuffer, 0, 1, scissor);
     }
 
     // Bind composite pipeline

@@ -79,13 +79,17 @@ void renderOutlineMask(
     void* meshCachePtr,
     void* ecsRegistryPtr,
     uint32_t selectedEntity,
-    uint32_t imageIndex);
+    uint32_t imageIndex,
+    const VkViewport* viewport = nullptr,
+    const VkRect2D* scissor = nullptr);
 
 // Composite outline onto the main render target
 void compositeOutline(
     VkCommandBuffer commandBuffer,
     const OutlineResources& resources,
     VkExtent2D extent,
-    uint32_t imageIndex);
+    uint32_t imageIndex,
+    const VkViewport* viewport = nullptr,
+    const VkRect2D* scissor = nullptr);
 
 } // namespace impgine
