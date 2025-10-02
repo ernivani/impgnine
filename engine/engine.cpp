@@ -40,7 +40,7 @@ Engine::~Engine() {
 
 void Engine::run() {
     std::cout << "Welcome to Impgine!\n";
-    loadScene(project.getFullPath(project.startupScene));
+    loadScene(project.getFullPath(project.lastScene));
     std::cout << "Project: " << project.projectName << " loaded" << std::endl;
     std::cout << "ECSRegistry currently has " << ECSRegistry::getRegistry().getEntities().size() << " entities" << std::endl;
 
@@ -80,7 +80,7 @@ void Engine::initVulkan() {
     resourceManager = new ResourceManager(device, physicalDevice);
 
     // Configure fallback texture path
-    resourceManager->setFallbackTexturePath(project.getFullPath("engine/textures/texture.jpg"));
+    resourceManager->setFallbackTexturePath(project.getEnginePath() + "/Textures/texture.jpg");
 
     // Set global resource manager context
     setResourceManagerGlobals(commandPool, graphicsQueue);
@@ -302,20 +302,20 @@ void Engine::loadScene(const std::string& scenePath) {
     pipelineConfig.pipelineLayout = pipelineLayout;
     pipelineConfig.multisampleInfo.rasterizationSamples = msaaSamples;
 
-    std::string vertShader = project.getFullPath(project.shadersPath + "/vert.spv");
-    std::string fragShader = project.getFullPath(project.shadersPath + "/frag.spv");
+    std::string vertShader = project.getShadersPath() + "/vert.spv";
+    std::string fragShader = project.getShadersPath() + "/frag.spv";
     pipeline = std::make_unique<Pipeline>(device, vertShader, fragShader, pipelineConfig);
 
     createCommandBuffers(device, commandPool, SwapChain::MAX_FRAMES_IN_FLIGHT, commandBuffers);
 
     // Initialize UI renderer and a default window
     {
-        std::string uiVert = project.getFullPath(project.shadersPath + "/ui.vert.spv");
-        std::string uiFrag = project.getFullPath(project.shadersPath + "/ui.frag.spv");
+        std::string uiVert = project.getShadersPath() + "/ui.vert.spv";
+        std::string uiFrag = project.getShadersPath() + "/ui.frag.spv";
         uiRenderer = std::make_unique<UIRenderer>(device, physicalDevice, renderPass, pipelineLayout, commandPool, graphicsQueue, *swapChain, msaaSamples, uiVert, uiFrag);
 
         // Load Arial font and create descriptor sets
-        std::string fontPath = project.getFullPath("engine/ttf/arial.ttf");
+        std::string fontPath = project.getEnginePath() + "/TTF/arial.ttf";
         uiRenderer->getTextRenderer()->loadFont(fontPath, 48);
 
         // Create descriptor sets after font texture is loaded
@@ -402,11 +402,11 @@ void Engine::drawFrame() {
 }
 
 void Engine::recreateSwapChain() {
-    std::string vertShader = project.getFullPath(project.shadersPath + "/vert.spv");
-    std::string fragShader = project.getFullPath(project.shadersPath + "/frag.spv");
-    std::string uiVert = project.getFullPath(project.shadersPath + "/ui.vert.spv");
-    std::string uiFrag = project.getFullPath(project.shadersPath + "/ui.frag.spv");
-    std::string fontPath = project.getFullPath("engine/ttf/arial.ttf");
+    std::string vertShader = project.getShadersPath() + "/vert.spv";
+    std::string fragShader = project.getShadersPath() + "/frag.spv";
+    std::string uiVert = project.getShadersPath() + "/ui.vert.spv";
+    std::string uiFrag = project.getShadersPath() + "/ui.frag.spv";
+    std::string fontPath = project.getEnginePath() + "/TTF/arial.ttf";
 
     // Release ownership from unique_ptrs so impgine::recreateSwapChain can delete them
     SwapChain* swapChainPtr = swapChain.release();

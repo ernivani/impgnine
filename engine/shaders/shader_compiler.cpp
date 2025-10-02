@@ -19,7 +19,7 @@ bool ShaderCompiler::compileShader(const std::string& sourcePath, const std::str
 
 void ShaderCompiler::compileAllShaders(const ProjectSettings& project) {
     std::cout << "Compiling shaders..." << std::endl;
-    std::string shaderPath = project.getFullPath(project.shadersPath);
+    std::string shaderPath = project.getShadersPath();
     std::string vertSource = shaderPath + "/shader.vert";
     std::string fragSource = shaderPath + "/shader.frag";
     std::string vertOutput = shaderPath + "/vert.spv";
