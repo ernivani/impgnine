@@ -20,8 +20,8 @@ namespace {
     }
 }
 
-InputManager::InputManager(Window* window, Camera* camera)
-    : window(window), camera(camera), lastMouseX(400.0), lastMouseY(300.0) {
+InputManager::InputManager(Window* window, Camera* camera, Engine* engine)
+    : window(window), camera(camera), engine(engine), lastMouseX(400.0), lastMouseY(300.0) {
 }
 
 void InputManager::processInput(float deltaTime) {
@@ -91,6 +91,13 @@ void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float 
             if (comp->state != UIComponentState::Focused) {
                 comp->state = UIComponentState::Normal;
             }
+            // Reset drop target state for tree nodes
+            if (comp->type == UIComponentType::TreeNode) {
+                auto treeNode = std::dynamic_pointer_cast<UITreeNode>(comp);
+                if (treeNode) {
+                    treeNode->isDropTarget = false;
+                }
+            }
         }
     }
 
@@ -114,6 +121,15 @@ void InputManager::updateComponentHover(std::vector<UIWindow>& uiWindows, float 
                 if (comp->state != UIComponentState::Focused) {
                     comp->state = UIComponentState::Hovered;
                 }
+
+                // If dragging an entity, mark tree nodes as drop targets
+                if (engine->isDraggingEntity && comp->type == UIComponentType::TreeNode) {
+                    auto treeNode = std::dynamic_pointer_cast<UITreeNode>(comp);
+                    if (treeNode && treeNode->entityId != engine->draggedEntity) {
+                        treeNode->isDropTarget = true;
+                    }
+                }
+
                 return; // Only one component can be hovered at a time
             }
         }
@@ -369,7 +385,7 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
     }
 }
 
-void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods, UIRenderer* uiRenderer, std::vector<UIWindow>& uiWindows) {
+void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods, UIRenderer* uiRenderer, std::vector<UIWindow>& uiWindows, Engine* engine) {
     (void)mods;
 
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
@@ -467,6 +483,33 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
                             }
                             break;
                         }
+                        case UIComponentType::TreeNode: {
+                            auto treeNode = std::dynamic_pointer_cast<UITreeNode>(comp);
+                            if (treeNode) {
+                                glm::vec2 localClick(xpos - absolutePos.x, ypos - absolutePos.y);
+
+                                // Check if clicking on the arrow
+                                float indent = treeNode->getIndentOffset();
+                                float arrowX = indent;
+                                if (localClick.x >= arrowX && localClick.x <= arrowX + treeNode->arrowSize) {
+                                    // Toggle expand/collapse
+                                    treeNode->isExpanded = !treeNode->isExpanded;
+                                    if (treeNode->onToggleExpand) {
+                                        treeNode->onToggleExpand();
+                                    }
+                                } else {
+                                    // Regular click - select entity and start drag
+                                    if (treeNode->onClick) {
+                                        treeNode->onClick(treeNode->entityId);
+                                    }
+                                    // Start drag operation
+                                    engine->draggedEntity = treeNode->entityId;
+                                    engine->isDraggingEntity = true;
+                                    treeNode->isDragging = true;
+                                }
+                            }
+                            break;
+                        }
                         default:
                             break;
                     }
@@ -496,6 +539,60 @@ void InputManager::mouseButtonCallback(GLFWwindow* window, int button, int actio
         if (draggedSlider) {
             draggedSlider->state = UIComponentState::Normal;
             draggedSlider = nullptr;
+        }
+
+        // Handle entity drag and drop
+        if (engine->isDraggingEntity) {
+            // Find the tree node under the cursor
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+
+            UITreeNode* dropTarget = nullptr;
+
+            for (auto& uiWindow : uiWindows) {
+                if (!uiWindow.isVisible || uiWindow.type != UIWindowType::Hierarchy) continue;
+
+                glm::vec2 contentPos = uiWindow.getContentPosition();
+                glm::vec2 contentSize = uiWindow.getContentSize();
+
+                for (auto& comp : uiWindow.components) {
+                    if (!comp->isVisible || comp->type != UIComponentType::TreeNode) continue;
+
+                    auto treeNode = std::dynamic_pointer_cast<UITreeNode>(comp);
+                    if (!treeNode) continue;
+
+                    // Calculate absolute position (flip Y)
+                    float flippedY = contentSize.y - comp->position.y - comp->size.y;
+                    glm::vec2 absolutePos = glm::vec2(contentPos.x + comp->position.x, contentPos.y + flippedY);
+
+                    if (xpos >= absolutePos.x && xpos <= absolutePos.x + comp->size.x &&
+                        ypos >= absolutePos.y && ypos <= absolutePos.y + comp->size.y) {
+                        dropTarget = treeNode.get();
+                        break;
+                    }
+                }
+            }
+
+            // Execute drop if valid target found
+            if (dropTarget && dropTarget->onDrop) {
+                dropTarget->onDrop(engine->draggedEntity, dropTarget->entityId);
+            }
+
+            // Reset all tree nodes' drag state
+            for (auto& uiWindow : uiWindows) {
+                for (auto& comp : uiWindow.components) {
+                    if (comp->type == UIComponentType::TreeNode) {
+                        auto treeNode = std::dynamic_pointer_cast<UITreeNode>(comp);
+                        if (treeNode) {
+                            treeNode->isDragging = false;
+                            treeNode->isDropTarget = false;
+                        }
+                    }
+                }
+            }
+
+            engine->isDraggingEntity = false;
+            engine->draggedEntity = INVALID_ENTITY;
         }
     }
 }

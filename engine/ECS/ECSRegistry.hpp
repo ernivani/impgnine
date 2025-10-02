@@ -35,6 +35,16 @@ namespace impgine {
         std::vector<Entity> getEntities();
         const std::unordered_map<std::type_index, void*>& getComponents(Entity entity) const;
 
+        // Hierarchy management
+        void setParent(Entity child, Entity parent);
+        void removeParent(Entity child);
+        std::vector<Entity> getChildren(Entity parent);
+        Entity getParent(Entity child);
+
+        // Active state management
+        void setActive(Entity entity, bool active);
+        bool isActiveInHierarchy(Entity entity);
+
         private:
         Entity nextEntityId = 0;
         std::unordered_set<Entity> alive;

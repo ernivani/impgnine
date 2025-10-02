@@ -13,6 +13,7 @@ namespace impgine {
         static void renderLabel(UIRenderer& renderer, UILabel& label, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts);
         static void renderCheckbox(UIRenderer& renderer, UICheckbox& checkbox, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts);
         static void renderSlider(UIRenderer& renderer, UISlider& slider, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts);
+        static void renderTreeNode(UIRenderer& renderer, UITreeNode& treeNode, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts);
 
         static void renderComponent(UIRenderer& renderer, UIComponent& component, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts);
     };

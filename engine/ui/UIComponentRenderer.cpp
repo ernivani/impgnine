@@ -189,6 +189,95 @@ namespace impgine {
         renderer.drawRect(handlePos, handleSize, slider.handleColor);
     }
 
+    void UIComponentRenderer::renderTreeNode(UIRenderer& renderer, UITreeNode& treeNode, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
+        glm::vec2 absolutePos = windowContentPos + treeNode.position;
+        glm::vec4 color = treeNode.getCurrentColor();
+
+        // Draw background with slight rounding effect (simulate by drawing main rect)
+        renderer.drawRect(absolutePos, treeNode.size, color);
+
+        // Calculate positions with indentation
+        float indent = treeNode.getIndentOffset();
+        float currentX = absolutePos.x + indent + 2.0f;
+
+        // Draw expand/collapse arrow if has children
+        if (treeNode.hasChildren) {
+            float arrowY = absolutePos.y + (treeNode.size.y - treeNode.arrowSize) * 0.5f;
+            float arrowCenterX = currentX + treeNode.arrowSize * 0.5f;
+            float arrowCenterY = arrowY + treeNode.arrowSize * 0.5f;
+
+            // Draw triangle arrow
+            if (treeNode.isExpanded) {
+                // Down-pointing triangle (▼)
+                float triWidth = treeNode.arrowSize * 0.6f;
+                float triHeight = treeNode.arrowSize * 0.45f;
+
+                // Draw as three lines forming a triangle
+                glm::vec2 top1(arrowCenterX - triWidth * 0.5f, arrowCenterY - triHeight * 0.3f);
+                glm::vec2 top2(arrowCenterX + triWidth * 0.5f, arrowCenterY - triHeight * 0.3f);
+                glm::vec2 bottom(arrowCenterX, arrowCenterY + triHeight * 0.7f);
+
+                // Horizontal top line
+                renderer.drawRect(top1, glm::vec2(triWidth, 1.5f), treeNode.arrowColor);
+                // Left diagonal (approximate with rectangle)
+                renderer.drawRect(glm::vec2(top1.x, top1.y), glm::vec2(1.5f, triHeight), treeNode.arrowColor);
+                // Right diagonal
+                renderer.drawRect(glm::vec2(top2.x, top2.y), glm::vec2(1.5f, triHeight), treeNode.arrowColor);
+                // Bottom point
+                renderer.drawRect(glm::vec2(bottom.x - 0.75f, bottom.y), glm::vec2(1.5f, 1.5f), treeNode.arrowColor);
+            } else {
+                // Right-pointing triangle (▶)
+                float triWidth = treeNode.arrowSize * 0.45f;
+                float triHeight = treeNode.arrowSize * 0.6f;
+
+                glm::vec2 left(arrowCenterX - triWidth * 0.3f, arrowCenterY - triHeight * 0.5f);
+                glm::vec2 right(arrowCenterX + triWidth * 0.7f, arrowCenterY);
+
+                // Vertical left line
+                renderer.drawRect(left, glm::vec2(1.5f, triHeight), treeNode.arrowColor);
+                // Top diagonal
+                renderer.drawRect(glm::vec2(left.x, left.y), glm::vec2(triWidth, 1.5f), treeNode.arrowColor);
+                // Bottom diagonal
+                renderer.drawRect(glm::vec2(left.x, arrowCenterY), glm::vec2(triWidth, 1.5f), treeNode.arrowColor);
+                // Right point
+                renderer.drawRect(glm::vec2(right.x, right.y - 0.75f), glm::vec2(1.5f, 1.5f), treeNode.arrowColor);
+            }
+        }
+
+        currentX += treeNode.arrowSize + 4.0f;
+
+        // Draw GameObject icon (simple cube representation)
+        float iconY = absolutePos.y + (treeNode.size.y - treeNode.iconSize) * 0.5f;
+        glm::vec4 iconColor = treeNode.isSelected ? glm::vec4(0.7f, 0.7f, 1.0f, 1.0f) : glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+
+        // Draw simple cube icon
+        float cubeSize = treeNode.iconSize * 0.7f;
+        float cubeX = currentX + (treeNode.iconSize - cubeSize) * 0.5f;
+        float cubeY = iconY + (treeNode.iconSize - cubeSize) * 0.5f;
+
+        // Outer square
+        renderer.drawRect(glm::vec2(cubeX, cubeY), glm::vec2(cubeSize, 1.0f), iconColor);
+        renderer.drawRect(glm::vec2(cubeX, cubeY + cubeSize - 1.0f), glm::vec2(cubeSize, 1.0f), iconColor);
+        renderer.drawRect(glm::vec2(cubeX, cubeY), glm::vec2(1.0f, cubeSize), iconColor);
+        renderer.drawRect(glm::vec2(cubeX + cubeSize - 1.0f, cubeY), glm::vec2(1.0f, cubeSize), iconColor);
+
+        currentX += treeNode.iconSize + 4.0f;
+
+        // Draw label text
+        float textY = absolutePos.y + (treeNode.size.y - 14.0f) * 0.5f;
+        if (!treeNode.label.empty()) {
+            renderer.renderText(treeNode.label, glm::vec2(currentX, textY), 0.35f, treeNode.getCurrentTextColor(), verts);
+        }
+
+        // Draw drop indicator if this is a drop target
+        if (treeNode.isDropTarget) {
+            // Draw a highlight line at the bottom
+            renderer.drawRect(glm::vec2(absolutePos.x + indent, absolutePos.y + treeNode.size.y - 2.0f),
+                            glm::vec2(treeNode.size.x - indent, 2.0f),
+                            glm::vec4(0.4f, 0.7f, 0.4f, 1.0f));
+        }
+    }
+
     void UIComponentRenderer::renderComponent(UIRenderer& renderer, UIComponent& component, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
         if (!component.isVisible) return;
 
@@ -207,6 +296,9 @@ namespace impgine {
                 break;
             case UIComponentType::Slider:
                 renderSlider(renderer, static_cast<UISlider&>(component), windowContentPos, verts);
+                break;
+            case UIComponentType::TreeNode:
+                renderTreeNode(renderer, static_cast<UITreeNode&>(component), windowContentPos, verts);
                 break;
         }
     }

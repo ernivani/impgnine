@@ -83,6 +83,7 @@ namespace impgine {
         // Helper to initialize Unity-like UI layout
         void initializeUnityLayout();
         void rebuildInspectorUI();
+        void rebuildHierarchyUI();
 
         // Accessors for input and save handlers
         public: const ProjectSettings& getProject() const { return project; }
@@ -169,6 +170,12 @@ namespace impgine {
         // Outline rendering
         OutlineResources outlineResources;
         public: uint32_t selectedEntity = INVALID_ENTITY;  // INVALID_ENTITY means no selection
+
+        // Drag and drop state
+        public: uint32_t draggedEntity = INVALID_ENTITY;
+        public: bool isDraggingEntity = false;
+        private: std::unordered_map<uint32_t, bool> expandedEntities;  // Track which entities are expanded in hierarchy
+        private: bool needsHierarchyRebuild = false;
     };
 
 } // namespace impgine

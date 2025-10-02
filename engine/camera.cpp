@@ -50,6 +50,7 @@ namespace impgine {
         forward.y = cos(rotation.y) * cos(rotation.x);
         forward.z = -sin(rotation.x);
         position += forward * distance;
+        if (onModified) onModified();
     }
 
     void Camera::moveBackward(float distance) {
@@ -62,9 +63,10 @@ namespace impgine {
         forward.x = sin(rotation.y) * cos(rotation.x);
         forward.y = cos(rotation.y) * cos(rotation.x);
         forward.z = -sin(rotation.x);
-        
+
         glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3(0.0f, 0.0f, 1.0f)));
         position -= right * distance;
+        if (onModified) onModified();
     }
 
     void Camera::moveRight(float distance) {
@@ -73,14 +75,17 @@ namespace impgine {
 
     void Camera::moveUp(float distance) {
         position.z += distance;  // Z is up in our coordinate system
+        if (onModified) onModified();
     }
 
     void Camera::moveDown(float distance) {
         position.z -= distance;
+        if (onModified) onModified();
     }
 
     void Camera::rotateYaw(float angle) {
         rotation.y += angle;
+        if (onModified) onModified();
     }
 
     void Camera::rotatePitch(float angle) {
@@ -88,6 +93,7 @@ namespace impgine {
         // Clamp pitch to prevent flipping
         const float maxPitch = glm::radians(89.0f);
         rotation.x = glm::clamp(rotation.x, -maxPitch, maxPitch);
+        if (onModified) onModified();
     }
 
     void Camera::updateViewMatrix() {

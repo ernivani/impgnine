@@ -187,7 +187,11 @@ void recordCommandBuffer(
 
     const auto entityList = registry->getEntities();
     for (const Entity e : entityList) {
-        auto &transform = registry->getComponent<impgine::Transform>(e);
+        // Skip inactive entities
+        if (!registry->isActiveInHierarchy(e)) {
+            continue;
+        }
+
         auto &meshRenderer = registry->getComponent<impgine::MeshRenderer>(e);
 
         // Get the mesh GPU resources
@@ -206,13 +210,8 @@ void recordCommandBuffer(
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
         vkCmdBindIndexBuffer(commandBuffer, meshResources.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        // Build model matrix for this entity
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, transform.position);
-        model = glm::rotate(model, transform.rotation.x, glm::vec3(1.0f, 0.0f, 0.0f));
-        model = glm::rotate(model, transform.rotation.y, glm::vec3(0.0f, 1.0f, 0.0f));
-        model = glm::rotate(model, transform.rotation.z, glm::vec3(0.0f, 0.0f, 1.0f));
-        model = glm::scale(model, transform.scale);
+        // Get world transform matrix (handles hierarchy automatically)
+        glm::mat4 model = impgine::Transform::getWorldMatrix(e);
 
         // Push the model matrix via push constants
         PushConstantData pushData{};
