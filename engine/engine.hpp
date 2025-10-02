@@ -71,6 +71,8 @@ namespace impgine {
         // Callback functions
         static void framebufferResizeCallback(GLFWwindow * window, int width, int height);
         static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+        static void characterCallback(GLFWwindow* window, unsigned int codepoint);
+        static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
         // Drawing
         void drawFrame();

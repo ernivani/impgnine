@@ -31,6 +31,8 @@ Engine::Engine() {
     window->setUserPointer(this);
     window->setFramebufferSizeCallback(framebufferResizeCallback);
     glfwSetMouseButtonCallback(window->getGLFWWindow(), mouseButtonCallback);
+    glfwSetCharCallback(window->getGLFWWindow(), characterCallback);
+    glfwSetKeyCallback(window->getGLFWWindow(), keyCallback);
 
     initVulkan();
 }
@@ -66,10 +68,9 @@ void Engine::initVulkan() {
                        deviceExtensions, validationLayers, enableValidationLayers, needsPortabilitySubset);
 
     createECSRegistry();
-    
-    // Initialize mouse capture
-    window->setCursorInputMode(GLFW_CURSOR_DISABLED);
-    window->setCursorPos(WIDTH / 2.0, HEIGHT / 2.0);
+
+    // Start with cursor visible for UI interaction
+    window->setCursorInputMode(GLFW_CURSOR_NORMAL);
 
     swapChain = std::make_unique<SwapChain>(device, physicalDevice, surface, *window);
 
@@ -493,6 +494,16 @@ void Engine::mouseButtonCallback(GLFWwindow* window, int button, int action, int
     auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
     InputManager::mouseButtonCallback(window, button, action, mods,
                                      app->uiRenderer.get(), app->uiWindows);
+}
+
+void Engine::characterCallback(GLFWwindow* window, unsigned int codepoint) {
+    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+    InputManager::characterCallback(window, codepoint, app->uiWindows);
+}
+
+void Engine::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
+    InputManager::keyCallback(window, key, scancode, action, mods, app->uiWindows);
 }
 
 }  // namespace impgine

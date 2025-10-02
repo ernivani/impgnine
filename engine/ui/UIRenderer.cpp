@@ -166,10 +166,6 @@ namespace impgine {
                 UIComponentRenderer::renderComponent(*this, *comp, contentPos);
             }
             // Convert currentVertices to NDC and add to verts
-            if (!currentVertices.empty()) {
-                std::cout << "Rendering " << currentVertices.size() << " component vertices in window '" << w.title << "'" << std::endl;
-                std::cout << "Content pos: (" << contentPos.x << ", " << contentPos.y << ")" << std::endl;
-            }
             for (const auto& v : currentVertices) {
                 verts.push_back({ toNDC(v.pos), v.color, v.uv });
             }
