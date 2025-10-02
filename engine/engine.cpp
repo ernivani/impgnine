@@ -96,7 +96,7 @@ void Engine::initVulkan() {
     createCommandPool(device, physicalDevice, surface, commandPool);
 
     // Create subsystems
-    inputManager = new InputManager(window.get(), &camera);
+    inputManager = new InputManager(window.get(), &camera, this);
     resourceManager = new ResourceManager(device, physicalDevice);
 
     // Configure fallback texture path
@@ -207,46 +207,10 @@ void Engine::initializeUnityLayout() {
     // Add example UI components to Inspector window (for demonstration)
     // Remove demo elements; inspector is built dynamically
 
-    // Populate Hierarchy window with UI elements for each entity
-    {
-        if (uiWindows.size() > 1) {
-            auto& hierarchyWindow = uiWindows[1];
-            auto& registry = ECSRegistry::getRegistry();
-            const auto& entities = registry.getEntities();
-
-            float y = 10.0f;
-            const float rowHeight = 25.0f;
-            for (const auto& entity : entities) {
-                std::string entityName = "Entity " + std::to_string(entity);
-                try {
-                    const auto& tag = registry.getComponent<Tag>(entity);
-                    if (!tag.tag.empty()) {
-                        entityName = tag.tag;
-                    }
-                } catch (...) {}
-
-                auto rowButton = std::make_shared<UIButton>();
-                rowButton->label = entityName;
-                rowButton->position = glm::vec2(10.0f, y);
-                rowButton->size = glm::vec2(hierarchyWindow.getContentSize().x - 20.0f, rowHeight - 5.0f);
-                rowButton->normalColor = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
-                rowButton->hoverColor = glm::vec4(0.16f, 0.16f, 0.16f, 1.0f);
-                rowButton->pressedColor = glm::vec4(0.10f, 0.10f, 0.10f, 1.0f);
-                rowButton->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-                rowButton->onClick = [this, entity]() {
-                    if (uiRenderer) uiRenderer->setSelectedEntity(entity);
-                    std::cout << "Selected entity: " << entity << std::endl;
-                    rebuildInspectorUI();
-                };
-                hierarchyWindow.addComponent(rowButton);
-
-                y += rowHeight;
-            }
-        }
-
+    // Populate Hierarchy window with tree nodes for entities
+    rebuildHierarchyUI();
     // Build inspector UI for initial selection (if any)
     rebuildInspectorUI();
-    }
 
     // Print UI layout information
     std::cout << "\n=== UI Layout Initialized ===" << std::endl;
@@ -815,7 +779,7 @@ void Engine::framebufferResizeCallback(GLFWwindow* window, int width, int height
 void Engine::mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
     auto app = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window));
     InputManager::mouseButtonCallback(window, button, action, mods,
-                                     app->uiRenderer.get(), app->uiWindows);
+                                     app->uiRenderer.get(), app->uiWindows, app);
 }
 
 void Engine::characterCallback(GLFWwindow* window, unsigned int codepoint) {
@@ -1204,6 +1168,137 @@ void Engine::showUnsavedChangesDialog() {
     dialog.addComponent(cancelButton);
 
     uiWindows.push_back(dialog);
+}
+
+void Engine::rebuildHierarchyUI() {
+    if (uiWindows.size() <= 1) return;
+
+    auto& hierarchyWindow = uiWindows[1];  // Hierarchy is second window
+    hierarchyWindow.components.clear();
+
+    auto& registry = ECSRegistry::getRegistry();
+    const auto& entities = registry.getEntities();
+
+    // Build a set of root entities (those without parents)
+    std::vector<Entity> rootEntities;
+    for (const auto& entity : entities) {
+        Entity parent = registry.getParent(entity);
+        if (parent == INVALID_ENTITY) {
+            rootEntities.push_back(entity);
+        }
+    }
+
+    // Recursive helper to add tree nodes
+    float y = 10.0f;
+    const float rowHeight = 24.0f;
+
+    std::function<void(Entity, int)> addEntityNode = [&](Entity entity, int depth) {
+        std::string entityName = "Entity " + std::to_string(entity);
+        try {
+            const auto& tag = registry.getComponent<Tag>(entity);
+            if (!tag.tag.empty()) {
+                entityName = tag.tag;
+            }
+        } catch (...) {}
+
+        auto treeNode = std::make_shared<UITreeNode>();
+        treeNode->label = entityName;
+        treeNode->entityId = entity;
+        treeNode->depth = depth;
+        treeNode->position = glm::vec2(10.0f, y);
+        treeNode->size = glm::vec2(hierarchyWindow.getContentSize().x - 20.0f, rowHeight);
+        treeNode->isSelected = (selectedEntity == entity);
+
+        // Check if expanded
+        auto expandIt = expandedEntities.find(entity);
+        treeNode->isExpanded = (expandIt != expandedEntities.end()) ? expandIt->second : true;
+
+        // Click handler
+        treeNode->onClick = [this, entity](uint32_t) {
+            selectedEntity = entity;
+            if (uiRenderer) uiRenderer->setSelectedEntity(entity);
+            rebuildInspectorUI();
+            rebuildHierarchyUI();  // Refresh to update selection
+        };
+
+        // Expand/collapse handler
+        treeNode->onToggleExpand = [this, entity]() {
+            expandedEntities[entity] = !expandedEntities[entity];
+            rebuildHierarchyUI();
+        };
+
+        // Drop handler for reparenting
+        treeNode->onDrop = [this, entity](uint32_t draggedEnt, uint32_t) {
+            if (draggedEnt != entity) {
+                auto& reg = ECSRegistry::getRegistry();
+
+                // Prevent circular dependencies
+                Entity checkParent = entity;
+                bool wouldCreateCycle = false;
+                while (checkParent != INVALID_ENTITY) {
+                    if (checkParent == draggedEnt) {
+                        wouldCreateCycle = true;
+                        break;
+                    }
+                    checkParent = reg.getParent(checkParent);
+                }
+
+                if (!wouldCreateCycle) {
+                    reg.setParent(draggedEnt, entity);
+                    markSceneModified();
+                    rebuildHierarchyUI();
+                }
+            }
+        };
+
+        hierarchyWindow.addComponent(treeNode);
+        y += rowHeight;
+
+        // Add children if expanded
+        if (treeNode->isExpanded) {
+            auto children = registry.getChildren(entity);
+            for (Entity child : children) {
+                addEntityNode(child, depth + 1);
+            }
+        }
+    };
+
+    // Add all root entities
+    for (Entity root : rootEntities) {
+        addEntityNode(root, 0);
+    }
+
+    // Add "Create Entity" button at the bottom
+    y += 10.0f;
+    auto createButton = std::make_shared<UIButton>();
+    createButton->label = "+ Create Entity";
+    createButton->position = glm::vec2(10.0f, y);
+    createButton->size = glm::vec2(hierarchyWindow.getContentSize().x - 20.0f, 30.0f);
+    createButton->normalColor = glm::vec4(0.25f, 0.45f, 0.35f, 1.0f);
+    createButton->hoverColor = glm::vec4(0.30f, 0.55f, 0.45f, 1.0f);
+    createButton->pressedColor = glm::vec4(0.20f, 0.40f, 0.30f, 1.0f);
+    createButton->onClick = [this]() {
+        auto& reg = ECSRegistry::getRegistry();
+        Entity newEntity = reg.createEntity();
+        reg.addComponent<Tag>(newEntity, Tag{"New Entity"});
+        reg.addComponent<Transform>(newEntity, Transform{});
+        reg.addComponent<Active>(newEntity, Active{true, true});
+
+        // Create with default mesh if available
+        std::string defaultModel = project.getFullPath("models/viking_room.obj");
+        std::string defaultTexture = project.getFullPath("textures/viking_room.png");
+        reg.addComponent<MeshRenderer>(newEntity, MeshRenderer{
+            std::make_shared<Mesh>(defaultModel),
+            std::make_shared<Texture2D>(defaultTexture),
+            glm::vec3(1.0f)
+        });
+
+        selectedEntity = newEntity;
+        markSceneModified();
+        rebuildHierarchyUI();
+        rebuildInspectorUI();
+    };
+    hierarchyWindow.addComponent(createButton);
 }
 
 }  // namespace impgine

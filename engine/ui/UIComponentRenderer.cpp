@@ -189,6 +189,51 @@ namespace impgine {
         renderer.drawRect(handlePos, handleSize, slider.handleColor);
     }
 
+    void UIComponentRenderer::renderTreeNode(UIRenderer& renderer, UITreeNode& treeNode, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
+        glm::vec2 absolutePos = windowContentPos + treeNode.position;
+        glm::vec4 color = treeNode.getCurrentColor();
+
+        // Draw background
+        renderer.drawRect(absolutePos, treeNode.size, color);
+
+        // Calculate positions with indentation
+        float indent = treeNode.getIndentOffset();
+        float arrowX = absolutePos.x + indent;
+        float textX = arrowX + treeNode.arrowSize + 4.0f;
+        float textY = absolutePos.y + (treeNode.size.y - 16.0f) * 0.5f;
+
+        // Draw expand/collapse arrow (simple triangle)
+        float arrowY = absolutePos.y + (treeNode.size.y - treeNode.arrowSize) * 0.5f;
+        glm::vec2 arrowPos(arrowX, arrowY);
+        glm::vec2 arrowSize(treeNode.arrowSize, treeNode.arrowSize);
+
+        // Draw arrow as a simple indicator (right for expanded, down for collapsed)
+        if (treeNode.isExpanded) {
+            // Down arrow (▼)
+            renderer.drawRect(arrowPos + glm::vec2(treeNode.arrowSize * 0.5f - 1.0f, 0.0f),
+                            glm::vec2(2.0f, treeNode.arrowSize), treeNode.arrowColor);
+            renderer.drawRect(arrowPos + glm::vec2(0.0f, treeNode.arrowSize * 0.5f - 1.0f),
+                            glm::vec2(treeNode.arrowSize, 2.0f), treeNode.arrowColor);
+        } else {
+            // Right arrow (▶)
+            renderer.drawRect(arrowPos + glm::vec2(0.0f, treeNode.arrowSize * 0.5f - 1.0f),
+                            glm::vec2(treeNode.arrowSize, 2.0f), treeNode.arrowColor);
+            renderer.drawRect(arrowPos + glm::vec2(treeNode.arrowSize * 0.5f - 1.0f, 0.0f),
+                            glm::vec2(2.0f, treeNode.arrowSize), treeNode.arrowColor);
+        }
+
+        // Draw label text
+        if (!treeNode.label.empty()) {
+            renderer.renderText(treeNode.label, glm::vec2(textX, textY), 0.4f, treeNode.textColor, verts);
+        }
+
+        // Draw drop indicator if dragging over
+        if (treeNode.isDragging) {
+            // Draw a semi-transparent overlay
+            renderer.drawRect(absolutePos, treeNode.size, glm::vec4(0.5f, 0.5f, 0.5f, 0.3f));
+        }
+    }
+
     void UIComponentRenderer::renderComponent(UIRenderer& renderer, UIComponent& component, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
         if (!component.isVisible) return;
 
@@ -207,6 +252,9 @@ namespace impgine {
                 break;
             case UIComponentType::Slider:
                 renderSlider(renderer, static_cast<UISlider&>(component), windowContentPos, verts);
+                break;
+            case UIComponentType::TreeNode:
+                renderTreeNode(renderer, static_cast<UITreeNode&>(component), windowContentPos, verts);
                 break;
         }
     }
