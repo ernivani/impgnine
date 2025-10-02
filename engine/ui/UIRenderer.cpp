@@ -137,6 +137,11 @@ namespace impgine {
             glm::vec2 p = w.position;
             glm::vec2 s = w.size;
 
+            // Bottom panel is positioned at Y=0 in layout but should render at screen bottom
+            if (w.dockPosition == DockPosition::Bottom) {
+                p.y = static_cast<float>(swapChain.getSwapChainExtent().height) - s.y;
+            }
+
             // Draw border
             if (w.borderWidth > 0.0f) {
                 addQuad(p, { s.x, w.borderWidth }, w.borderColor);  // Top
@@ -168,9 +173,17 @@ namespace impgine {
             // First collect vertices where text should be inserted
             size_t textInsertPoint = verts.size();
 
-            // Render components (adds rects to currentVertices, text directly to verts)
+            // Render components with Y-flipped positions
+            // Components use Y from top (Y=0 at top), but rendering expects Y from bottom
             for (const auto& comp : w.components) {
+                // Flip component Y position relative to content area
+                glm::vec2 originalPos = comp->position;
+                comp->position.y = contentSize.y - comp->position.y - comp->size.y;
+
                 UIComponentRenderer::renderComponent(*this, *comp, contentPos, verts);
+
+                // Restore original position
+                comp->position = originalPos;
             }
 
             // Now insert the rects (currentVertices) at the textInsertPoint
