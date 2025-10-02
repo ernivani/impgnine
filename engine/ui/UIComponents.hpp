@@ -67,10 +67,12 @@ namespace impgine {
     struct UIInputField : public UIComponent {
         std::string text { "" };
         std::string placeholder { "Enter text..." };
+        std::function<void(const std::string&)> onCommit { nullptr };
         size_t cursorPosition { 0 };
         size_t selectionStart { 0 };
         size_t selectionEnd { 0 };
         size_t maxLength { 256 };
+        size_t scrollStart { 0 }; // first visible character index for horizontal scroll
 
         glm::vec4 backgroundColor { 0.25f, 0.25f, 0.3f, 1.0f };
         glm::vec4 focusedColor { 0.3f, 0.3f, 0.4f, 1.0f };

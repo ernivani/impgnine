@@ -166,10 +166,6 @@ void InputManager::handleUIInput(UIRenderer* uiRenderer, std::vector<UIWindow>& 
 void InputManager::characterCallback(GLFWwindow* window, unsigned int codepoint, std::vector<UIWindow>& uiWindows) {
     (void)window;
 
-    // Debug character input
-    if (codepoint == 'a' || codepoint == 'A') {
-        std::cout << "Character callback received: '" << static_cast<char>(codepoint) << "'" << std::endl;
-    }
 
     // Find focused input field
     for (auto& uiWindow : uiWindows) {
@@ -273,8 +269,12 @@ void InputManager::keyCallback(GLFWwindow* window, int key, int scancode, int ac
                         input->moveCursorToStart(shiftHeld);
                     } else if (key == GLFW_KEY_END) {
                         input->moveCursorToEnd(shiftHeld);
-                    } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_ESCAPE) {
-                        // Unfocus on Enter/Escape
+                    } else if (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER) {
+                        // Commit on Enter
+                        if (input->onCommit) input->onCommit(input->text);
+                        comp->state = UIComponentState::Normal;
+                    } else if (key == GLFW_KEY_ESCAPE) {
+                        // Cancel focus on Escape
                         comp->state = UIComponentState::Normal;
                     }
                 }

@@ -5,7 +5,6 @@
 namespace impgine {
 
     void UIComponentRenderer::renderButton(UIRenderer& renderer, UIButton& button, const glm::vec2& windowContentPos, std::vector<UIVertex>& verts) {
-        (void)verts; // Not using text in buttons yet
         glm::vec2 absolutePos = windowContentPos + button.position;
         glm::vec4 color = button.getCurrentColor();
 
@@ -19,7 +18,7 @@ namespace impgine {
             float textX = absolutePos.x + (button.size.x - textWidth) * 0.5f;
             float textY = absolutePos.y + (button.size.y - 16.0f) * 0.5f; // 16 is font size estimate
 
-            renderer.drawText(button.label, glm::vec2(textX, textY), button.textColor);
+            renderer.renderText(button.label, glm::vec2(textX, textY), 0.4f, button.textColor, verts);
         }
     }
 
@@ -64,8 +63,45 @@ namespace impgine {
                 renderer.drawRect(selectionPos, selectionSize, input.selectionColor);
             }
 
-            // Use renderText directly to avoid double NDC conversion
-            renderer.renderText(input.text, textPos, 0.5f, input.textColor, verts);
+            // Clip/scroll horizontally by adjusting starting character based on available width
+            auto textRenderer = renderer.getTextRenderer();
+            size_t startIndex = input.scrollStart;
+            if (textRenderer) {
+                float scale = 0.5f;
+                float available = input.size.x - 2.0f * input.padding;
+
+                // Ensure cursor is visible; scroll left or right as needed
+                float widthBeforeCursor = 0.0f;
+                for (size_t i = 0; i < input.cursorPosition && i < input.text.length(); ++i) {
+                    const Character* ch = textRenderer->getCharacter(input.text[i]);
+                    if (ch) widthBeforeCursor += (ch->advance >> 6) * scale;
+                }
+                // Compute width of visible region starting at scrollStart
+                float widthFromStartToCursor = 0.0f;
+                for (size_t i = startIndex; i < input.cursorPosition && i < input.text.length(); ++i) {
+                    const Character* ch = textRenderer->getCharacter(input.text[i]);
+                    if (ch) widthFromStartToCursor += (ch->advance >> 6) * scale;
+                }
+                // Scroll right if cursor beyond visible area
+                while (widthFromStartToCursor > available && startIndex < input.text.length()) {
+                    const Character* ch = textRenderer->getCharacter(input.text[startIndex]);
+                    if (!ch) break;
+                    widthFromStartToCursor -= (ch->advance >> 6) * scale;
+                    startIndex++;
+                }
+                // Scroll left if there is space and we scrolled too far
+                while (startIndex > 0 && widthFromStartToCursor + 20.0f < available) { // small padding
+                    const Character* ch = textRenderer->getCharacter(input.text[startIndex - 1]);
+                    if (!ch) break;
+                    float adv = (ch->advance >> 6) * scale;
+                    if (widthFromStartToCursor + adv > available) break;
+                    startIndex--; widthFromStartToCursor += adv;
+                }
+            }
+            input.scrollStart = startIndex;
+
+            std::string visible = input.text.substr(startIndex);
+            renderer.renderText(visible, textPos, 0.5f, input.textColor, verts);
         } else if (!input.placeholder.empty()) {
             renderer.renderText(input.placeholder, textPos, 0.5f, input.placeholderColor, verts);
         }
@@ -77,7 +113,9 @@ namespace impgine {
             auto textRenderer = renderer.getTextRenderer();
             if (textRenderer) {
                 float scale = 0.5f;
-                for (size_t i = 0; i < input.cursorPosition && i < input.text.length(); ++i) {
+                // Start from scrollStart to place cursor within visible region
+                size_t startIndex = std::min(input.scrollStart, input.text.length());
+                for (size_t i = startIndex; i < input.cursorPosition && i < input.text.length(); ++i) {
                     const Character* ch = textRenderer->getCharacter(input.text[i]);
                     if (ch) {
                         cursorX += (ch->advance >> 6) * scale;
@@ -117,7 +155,7 @@ namespace impgine {
         // Draw label
         if (!checkbox.label.empty()) {
             glm::vec2 textPos = absolutePos + glm::vec2(checkbox.boxSize + checkbox.spacing, 2.0f);
-            renderer.drawText(checkbox.label, textPos, checkbox.textColor);
+            renderer.renderText(checkbox.label, textPos, 0.4f, checkbox.textColor, verts);
         }
     }
 

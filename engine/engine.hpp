@@ -80,6 +80,7 @@ namespace impgine {
 
         // Helper to initialize Unity-like UI layout
         void initializeUnityLayout();
+        void rebuildInspectorUI();
 
         // Member variables
         ProjectSettings project;

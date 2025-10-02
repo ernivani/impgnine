@@ -185,54 +185,47 @@ void Engine::initializeUnityLayout() {
     }
 
     // Add example UI components to Inspector window (for demonstration)
+    // Remove demo elements; inspector is built dynamically
+
+    // Populate Hierarchy window with UI elements for each entity
     {
-        // Find the inspector window (index 2 based on creation order)
-        if (uiWindows.size() > 2) {
-            auto& inspectorWindow = uiWindows[2];
+        if (uiWindows.size() > 1) {
+            auto& hierarchyWindow = uiWindows[1];
+            auto& registry = ECSRegistry::getRegistry();
+            const auto& entities = registry.getEntities();
 
-            // Add a button
-            auto button = std::make_shared<UIButton>();
-            button->label = "Test Button";
-            button->position = glm::vec2(10.0f, 200.0f);
-            button->size = glm::vec2(150.0f, 30.0f);
-            button->onClick = []() {
-                std::cout << "Button clicked!" << std::endl;
-            };
-            inspectorWindow.addComponent(button);
+            float y = 10.0f;
+            const float rowHeight = 25.0f;
+            for (const auto& entity : entities) {
+                std::string entityName = "Entity " + std::to_string(entity);
+                try {
+                    const auto& tag = registry.getComponent<Tag>(entity);
+                    if (!tag.tag.empty()) {
+                        entityName = tag.tag;
+                    }
+                } catch (...) {}
 
-            // Add an input field
-            auto input = std::make_shared<UIInputField>();
-            input->placeholder = "Enter name...";
-            input->position = glm::vec2(10.0f, 240.0f);
-            input->size = glm::vec2(150.0f, 25.0f);
-            inspectorWindow.addComponent(input);
+                auto rowButton = std::make_shared<UIButton>();
+                rowButton->label = entityName;
+                rowButton->position = glm::vec2(10.0f, y);
+                rowButton->size = glm::vec2(hierarchyWindow.getContentSize().x - 20.0f, rowHeight - 5.0f);
+                rowButton->normalColor = glm::vec4(0.12f, 0.12f, 0.12f, 1.0f);
+                rowButton->hoverColor = glm::vec4(0.16f, 0.16f, 0.16f, 1.0f);
+                rowButton->pressedColor = glm::vec4(0.10f, 0.10f, 0.10f, 1.0f);
+                rowButton->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+                rowButton->onClick = [this, entity]() {
+                    if (uiRenderer) uiRenderer->setSelectedEntity(entity);
+                    std::cout << "Selected entity: " << entity << std::endl;
+                    rebuildInspectorUI();
+                };
+                hierarchyWindow.addComponent(rowButton);
 
-            // Add a checkbox
-            auto checkbox = std::make_shared<UICheckbox>();
-            checkbox->label = "Enable Feature";
-            checkbox->position = glm::vec2(10.0f, 280.0f);
-            checkbox->onToggle = [](bool checked) {
-                std::cout << "Checkbox " << (checked ? "checked" : "unchecked") << std::endl;
-            };
-            inspectorWindow.addComponent(checkbox);
-
-            // Add a slider
-            auto slider = std::make_shared<UISlider>();
-            slider->position = glm::vec2(10.0f, 320.0f);
-            slider->size = glm::vec2(180.0f, 20.0f);
-            slider->value = 0.75f;
-            slider->onValueChanged = [](float value) {
-                std::cout << "Slider value: " << value << std::endl;
-            };
-            inspectorWindow.addComponent(slider);
-
-            // Add a label
-            auto label = std::make_shared<UILabel>();
-            label->text = "UI Components Demo";
-            label->position = glm::vec2(10.0f, 170.0f);
-            label->textColor = glm::vec4(0.3f, 0.7f, 1.0f, 1.0f);
-            inspectorWindow.addComponent(label);
+                y += rowHeight;
+            }
         }
+
+    // Build inspector UI for initial selection (if any)
+    rebuildInspectorUI();
     }
 
     // Print UI layout information
@@ -299,6 +292,140 @@ void Engine::cleanup() {
     // Clean up subsystems
     delete inputManager;
     delete resourceManager;
+}
+
+void Engine::rebuildInspectorUI() {
+    if (!uiRenderer) return;
+
+    // Ensure there is an inspector window
+    if (uiWindows.size() <= 2) return;
+    auto& inspectorWindow = uiWindows[2];
+    if (inspectorWindow.type != UIWindowType::Inspector) return;
+
+    // Clear existing components
+    inspectorWindow.components.clear();
+
+    const Entity selected = uiRenderer->getSelectedEntity();
+    if (selected == INVALID_ENTITY) {
+        // Show placeholder text
+        auto label = std::make_shared<UILabel>();
+        label->text = "No selection";
+        label->position = glm::vec2(10.0f, 10.0f);
+        label->textColor = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+        inspectorWindow.addComponent(label);
+        return;
+    }
+
+    auto& registry = ECSRegistry::getRegistry();
+
+    float y = 10.0f;
+
+    // Header: Entity name
+    {
+        std::string name = "Entity " + std::to_string(selected);
+        try {
+            const auto& tag = registry.getComponent<Tag>(selected);
+            if (!tag.tag.empty()) name = tag.tag;
+        } catch (...) {}
+
+        auto nameLabel = std::make_shared<UILabel>();
+        nameLabel->text = name;
+        nameLabel->position = glm::vec2(10.0f, y);
+        nameLabel->textColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+        inspectorWindow.addComponent(nameLabel);
+        y += 30.0f;
+    }
+
+    // Transform section title
+    auto transformTitle = std::make_shared<UILabel>();
+    transformTitle->text = "Transform";
+    transformTitle->position = glm::vec2(10.0f, y);
+    transformTitle->textColor = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+    inspectorWindow.addComponent(transformTitle);
+    y += 25.0f;
+
+    // Display transform as editable X/Y/Z fields similar to Unity
+    try {
+        const auto& transform = registry.getComponent<Transform>(selected);
+
+        auto makeLabel = [&](const char* text, float ypos) {
+            auto lbl = std::make_shared<UILabel>();
+            lbl->text = text;
+            lbl->position = glm::vec2(10.0f, ypos);
+            lbl->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+            inspectorWindow.addComponent(lbl);
+        };
+
+        auto makeAxisLabel = [&](const char* text, float xpos, float ypos) {
+            auto lbl = std::make_shared<UILabel>();
+            lbl->text = text;
+            lbl->position = glm::vec2(xpos, ypos);
+            lbl->textColor = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
+            inspectorWindow.addComponent(lbl);
+        };
+
+        auto makeField = [&](float xpos, float ypos, float value, std::function<void(float)> setter) {
+            auto field = std::make_shared<UIInputField>();
+            field->position = glm::vec2(xpos, ypos - 3.0f);
+            field->size = glm::vec2(70.0f, 20.0f);
+            std::string txt = std::to_string(value);
+            if (txt.size() > 6) txt = txt.substr(0, 6);
+            field->text = txt;
+            field->onCommit = [setter](const std::string& s){
+                try { setter(std::stof(s)); } catch (...) {}
+            };
+            inspectorWindow.addComponent(field);
+        };
+
+        // Row: Position
+        {
+            float rowY = y; makeLabel("Position", rowY); y += 28.0f;
+            makeAxisLabel("X", 95.0f, rowY);
+            makeField(110.0f, rowY, transform.position.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.x = v; });
+            makeAxisLabel("Y", 175.0f, rowY);
+            makeField(190.0f, rowY, transform.position.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.y = v; });
+            makeAxisLabel("Z", 255.0f, rowY);
+            makeField(270.0f, rowY, transform.position.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.position.z = v; });
+        }
+
+        // Row: Rotation
+        {
+            float rowY = y; makeLabel("Rotation", rowY); y += 28.0f;
+            makeAxisLabel("X", 95.0f, rowY);
+            makeField(110.0f, rowY, transform.rotation.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.x = v; });
+            makeAxisLabel("Y", 175.0f, rowY);
+            makeField(190.0f, rowY, transform.rotation.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.y = v; });
+            makeAxisLabel("Z", 255.0f, rowY);
+            makeField(270.0f, rowY, transform.rotation.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.rotation.z = v; });
+        }
+
+        // Row: Scale
+        {
+            float rowY = y; makeLabel("Scale", rowY); y += 28.0f;
+            makeAxisLabel("X", 95.0f, rowY);
+            makeField(110.0f, rowY, transform.scale.x, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.x = v; });
+            makeAxisLabel("Y", 175.0f, rowY);
+            makeField(190.0f, rowY, transform.scale.y, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.y = v; });
+            makeAxisLabel("Z", 255.0f, rowY);
+            makeField(270.0f, rowY, transform.scale.z, [selected](float v){ auto& r = ECSRegistry::getRegistry(); auto& t = r.getComponent<Transform>(selected); t.scale.z = v; });
+        }
+    } catch (...) {
+        auto msg = std::make_shared<UILabel>();
+        msg->text = "Transform: (missing)";
+        msg->position = glm::vec2(10.0f, y);
+        msg->textColor = glm::vec4(0.8f, 0.4f, 0.4f, 1.0f);
+        inspectorWindow.addComponent(msg);
+        y += 22.0f;
+    }
+
+    // Add Component button
+    y += 10.0f;
+    auto addButton = std::make_shared<UIButton>();
+    addButton->label = "Add Component";
+    addButton->position = glm::vec2(10.0f, y);
+    addButton->size = glm::vec2(inspectorWindow.getContentSize().x - 20.0f, 28.0f);
+    addButton->onClick = [](){ std::cout << "Add Component clicked" << std::endl; };
+    inspectorWindow.addComponent(addButton);
 }
 
 void Engine::loadScene(const std::string& scenePath) {
@@ -411,6 +538,9 @@ void Engine::drawFrame() {
     ubo.view = camera.getView();
     ubo.proj = camera.getProjection();
     impgine::updateUniformBuffer(device, uniformBuffersMemory[imageIndex], &ubo, sizeof(ubo));
+
+    // Rebuild inspector UI each frame based on selection
+    rebuildInspectorUI();
 
     // Record command buffer
     vkResetCommandBuffer(commandBuffers[currentFrame], 0);
