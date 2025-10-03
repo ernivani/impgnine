@@ -9,6 +9,7 @@
 #include "../ui/UIWindow.hpp"
 #include "../ECS/ECSRegistry.hpp"
 #include "../ECS/components.hpp"
+#include "../resources/resource_manager.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <array>
@@ -26,21 +27,6 @@ struct UniformBufferObject {
 
 struct PushConstantData {
     alignas(16) glm::mat4 model;
-};
-
-struct MeshGPUResources {
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
-    VkBuffer vertexBuffer;
-    VkDeviceMemory vertexBufferMemory;
-    VkBuffer indexBuffer;
-    VkDeviceMemory indexBufferMemory;
-    VkImage textureImage;
-    VkDeviceMemory textureImageMemory;
-    VkImageView textureImageView;
-    VkSampler textureSampler;
-    uint32_t mipLevels;
-    std::vector<VkDescriptorSet> descriptorSets;
 };
 
 void cleanupSwapChain(
@@ -85,6 +71,7 @@ void recordCommandBuffer(
     void* pipelinePtr,
     VkPipelineLayout pipelineLayout,
     void* meshCachePtr,
+    void* spriteCachePtr,
     void* ecsRegistryPtr,
     void* uiRendererPtr,
     void* windowPtr,
@@ -94,6 +81,7 @@ void recordCommandBuffer(
 
     Pipeline* pipeline = static_cast<Pipeline*>(pipelinePtr);
     auto& meshCache = *static_cast<std::unordered_map<std::string, MeshGPUResources>*>(meshCachePtr);
+    auto& spriteCache = *static_cast<std::unordered_map<std::string, SpriteGPUResources>*>(spriteCachePtr);
     ECSRegistry* registry = static_cast<ECSRegistry*>(ecsRegistryPtr);
     UIRenderer* uiRenderer = static_cast<UIRenderer*>(uiRendererPtr);
     Window* window = static_cast<Window*>(windowPtr);
@@ -192,10 +180,18 @@ void recordCommandBuffer(
             continue;
         }
 
-        auto &meshRenderer = registry->getComponent<impgine::MeshRenderer>(e);
+        // Skip entities without MeshRenderer (e.g., SpriteRenderer entities)
+        impgine::MeshRenderer* meshRenderer = nullptr;
+        try {
+            meshRenderer = &registry->getComponent<impgine::MeshRenderer>(e);
+        } catch (...) {
+            continue; // Entity doesn't have MeshRenderer, skip it
+        }
+
+        if (!meshRenderer) continue;
 
         // Get the mesh GPU resources
-        auto meshIt = meshCache.find(meshRenderer.mesh->modelPath);
+        auto meshIt = meshCache.find(meshRenderer->mesh->modelPath);
         if (meshIt == meshCache.end()) {
             continue; // Skip if mesh not loaded
         }
@@ -219,6 +215,50 @@ void recordCommandBuffer(
         vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &pushData);
 
         vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(meshResources.indices.size()), 1, 0, 0, 0);
+    }
+
+    // Render sprites
+    for (const Entity e : entityList) {
+        // Skip inactive entities
+        if (!registry->isActiveInHierarchy(e)) {
+            continue;
+        }
+
+        // Skip entities without SpriteRenderer
+        impgine::SpriteRenderer* spriteRenderer = nullptr;
+        try {
+            spriteRenderer = &registry->getComponent<impgine::SpriteRenderer>(e);
+        } catch (...) {
+            continue; // Entity doesn't have SpriteRenderer, skip it
+        }
+
+        if (!spriteRenderer || !spriteRenderer->texture) continue;
+
+        // Get the sprite GPU resources
+        auto spriteIt = spriteCache.find(spriteRenderer->texture->texturePath);
+        if (spriteIt == spriteCache.end()) {
+            continue; // Skip if sprite not loaded
+        }
+        auto& spriteResources = spriteIt->second;
+
+        // Bind descriptor set for this sprite (includes its texture)
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &spriteResources.descriptorSets[imageIndex], 0, nullptr);
+
+        // Bind vertex and index buffers for this sprite's quad
+        VkBuffer vertexBuffers[] = {spriteResources.vertexBuffer};
+        VkDeviceSize offsets[] = {0};
+        vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+        vkCmdBindIndexBuffer(commandBuffer, spriteResources.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+        // Get world transform matrix (handles hierarchy automatically)
+        glm::mat4 model = impgine::Transform::getWorldMatrix(e);
+
+        // Push the model matrix via push constants
+        PushConstantData pushData{};
+        pushData.model = model;
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantData), &pushData);
+
+        vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(spriteResources.indices.size()), 1, 0, 0, 0);
     }
 
     // Composite outline if entity is selected (INVALID_ENTITY is max uint32)

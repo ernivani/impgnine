@@ -37,12 +37,14 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
         std::string modelPath;
         std::string texturePath;
         glm::vec3 color {1.0f, 1.0f, 1.0f};
+        bool hasMeshRenderer = false;
+        bool hasSpriteRenderer = false;
     };
 
     std::vector<PendingEntity> entitiesToCreate;
     PendingEntity current;
     bool inEntityBlock = false;
-    enum class Section { None, Transform, MeshRenderer };
+    enum class Section { None, Transform, MeshRenderer, SpriteRenderer };
     Section section = Section::None;
 
     auto trim = [](std::string s) {
@@ -72,6 +74,7 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
 
             if (line == "Transform:") { section = Section::Transform; continue; }
             if (line == "MeshRenderer:") { section = Section::MeshRenderer; continue; }
+            if (line == "SpriteRenderer:") { section = Section::SpriteRenderer; continue; }
 
             auto sep = line.find(':');
             if (sep == std::string::npos) continue;
@@ -120,8 +123,13 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
                 else if (key == "rotation") current.rotation = parseObjVec3(value);
                 else if (key == "scale") current.scale = parseObjVec3(value);
             } else if (section == Section::MeshRenderer) {
+                current.hasMeshRenderer = true;
                 if (key == "modelPath") current.modelPath = value;
                 else if (key == "texturePath") current.texturePath = value;
+                else if (key == "color") current.color = parseObjVec3(value);
+            } else if (section == Section::SpriteRenderer) {
+                current.hasSpriteRenderer = true;
+                if (key == "texture") current.texturePath = value;
                 else if (key == "color") current.color = parseObjVec3(value);
             }
         }
@@ -154,18 +162,29 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
         // Set active state
         reg.addComponent<impgine::Active>(e, impgine::Active{ pe.isActive, pe.isActive });
 
-        // Resolve paths relative to project
-        std::string fullModelPath = project.getFullPath(pe.modelPath);
-        std::string fullTexturePath = project.getFullPath(pe.texturePath);
+        // Add appropriate renderer component based on what was found in the scene file
+        if (pe.hasMeshRenderer) {
+            // Resolve paths relative to project
+            std::string fullModelPath = project.getFullPath(pe.modelPath);
+            std::string fullTexturePath = project.getFullPath(pe.texturePath);
 
-        reg.addComponent<impgine::MeshRenderer>(e, impgine::MeshRenderer{
-            std::make_shared<impgine::Mesh>(fullModelPath),
-            std::make_shared<impgine::Texture2D>(fullTexturePath),
-            pe.color,
-            impgine::AABB{},  // Will be filled during resource loading
-            {},  // vertices - will be filled during resource loading
-            {}   // indices - will be filled during resource loading
-        });
+            reg.addComponent<impgine::MeshRenderer>(e, impgine::MeshRenderer{
+                std::make_shared<impgine::Mesh>(fullModelPath),
+                std::make_shared<impgine::Texture2D>(fullTexturePath),
+                pe.color,
+                impgine::AABB{},  // Will be filled during resource loading
+                {},  // vertices - will be filled during resource loading
+                {}   // indices - will be filled during resource loading
+            });
+        } else if (pe.hasSpriteRenderer) {
+            // Resolve texture path relative to project
+            std::string fullTexturePath = project.getFullPath(pe.texturePath);
+
+            reg.addComponent<impgine::SpriteRenderer>(e, impgine::SpriteRenderer{
+                pe.color,
+                std::make_shared<impgine::Texture2D>(fullTexturePath, pe.color)
+            });
+        }
     }
 
     // Second pass: establish hierarchy relationships
@@ -280,6 +299,7 @@ bool SceneLoader::saveScene(const std::string& scenePath, const ProjectSettings&
             writeVec3("scale", t.scale);
         } catch (...) {}
 
+        // Try MeshRenderer first
         try {
             const auto& mr = registry.getComponent<MeshRenderer>(e);
             file << "MeshRenderer:\n";
@@ -289,7 +309,17 @@ bool SceneLoader::saveScene(const std::string& scenePath, const ProjectSettings&
             file << "  modelPath: " << relModel << "\n";
             file << "  texturePath: " << relTex << "\n";
             writeVec3("color", mr.color);
-        } catch (...) {}
+        } catch (...) {
+            // Try SpriteRenderer if MeshRenderer not found
+            try {
+                const auto& sr = registry.getComponent<SpriteRenderer>(e);
+                file << "SpriteRenderer:\n";
+                // Persist texture path relative to project root
+                std::string relTex = sr.texture ? project.toRelativePath(sr.texture->texturePath) : "";
+                file << "  texture: " << relTex << "\n";
+                writeVec3("color", sr.color);
+            } catch (...) {}
+        }
     }
 
     return true;

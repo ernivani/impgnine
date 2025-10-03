@@ -30,6 +30,7 @@ void recordCommandBuffer(
     void* pipelinePtr,  // Will be cast to Pipeline*
     VkPipelineLayout pipelineLayout,
     void* meshCachePtr,  // Will be cast to std::unordered_map<std::string, MeshGPUResources>*
+    void* spriteCachePtr,  // Will be cast to std::unordered_map<std::string, SpriteGPUResources>*
     void* ecsRegistryPtr,  // Will be cast to ECSRegistry*
     void* uiRendererPtr,  // Will be cast to UIRenderer*
     void* windowPtr,  // Will be cast to Window*

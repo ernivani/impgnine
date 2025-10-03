@@ -1,7 +1,7 @@
 %IMP 1.0
 Camera:
-  position: {x: 18.4133, y: -4.39603, z: 5.80964}
-  rotation: {x: 0.398096, y: -0.857948, z: 0}
+  position: {x: 8.8827, y: 6.44616, z: 2.79881}
+  rotation: {x: 0.454957, y: 0.4608, z: 0}
 --- !imp!Entity
 name: VikingRoom
 active: true
@@ -17,7 +17,7 @@ MeshRenderer:
 name: Airplane1
 active: true
 Transform:
-  position: {x: 0, y: 10, z: 0}
+  position: {x: 10, y: 10, z: 0}
   rotation: {x: 0, y: 0, z: 0}
   scale: {x: 0.1, y: 0.1, z: 0.1}
 MeshRenderer:
@@ -58,13 +58,12 @@ MeshRenderer:
   texturePath: assets/textures/viking_room.png
   color: {x: 1, y: 1, z: 1}
 --- !imp!Entity
-name: entity_to_hit
+name: entity_to_see
 active: true
 Transform:
   position: {x: 5, y: 5, z: 0}
   rotation: {x: 0, y: 0, z: 0}
-  scale: {x: 1.5, y: 1.5, z: 1.5}
-MeshRenderer:
-  modelPath: assets/models/viking_room.obj
-  texturePath: assets/textures/viking_room.png
+  scale: {x: 1, y: 1, z: 1.5}
+SpriteRenderer:
+  texture: assets/textures/image1.png
   color: {x: 1, y: 1, z: 1}

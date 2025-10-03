@@ -116,6 +116,14 @@ void createDescriptorSets(
     uint32_t imageCount,
     void* meshCachePtr);  // Will be cast to std::unordered_map<std::string, MeshGPUResources>*
 
+void createDescriptorSetsForSprites(
+    VkDevice device,
+    VkDescriptorPool descriptorPool,
+    VkDescriptorSetLayout descriptorSetLayout,
+    const std::vector<VkBuffer>& uniformBuffers,
+    uint32_t imageCount,
+    void* spriteCachePtr);  // Will be cast to std::unordered_map<std::string, SpriteGPUResources>*
+
 // MSAA and depth resources
 void createColorResources(
     VkDevice device,

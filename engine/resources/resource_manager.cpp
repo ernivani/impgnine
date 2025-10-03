@@ -160,4 +160,37 @@ MeshGPUResources& ResourceManager::loadMeshResources(const std::string& modelPat
     return meshCache[modelPath];
 }
 
+SpriteGPUResources& ResourceManager::loadSpriteResources(const std::string& texturePath) {
+    auto it = spriteCache.find(texturePath);
+    if (it != spriteCache.end()) {
+        return it->second;
+    }
+
+    SpriteGPUResources resources;
+
+    // Create a quad (two triangles) for the sprite
+    // Vertices positioned at unit square centered at origin
+    resources.vertices = {
+        {{-0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},  // bottom-left
+        {{ 0.5f, -0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},  // bottom-right
+        {{ 0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},  // top-right
+        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}   // top-left
+    };
+
+    // Two triangles forming a quad
+    resources.indices = {
+        0, 1, 2,  // First triangle
+        2, 3, 0   // Second triangle
+    };
+
+    createVertexBuffer(resources.vertices, resources.vertexBuffer, resources.vertexBufferMemory);
+    createIndexBuffer(resources.indices, resources.indexBuffer, resources.indexBufferMemory);
+    createTextureImage(texturePath, resources.textureImage, resources.textureImageMemory, resources.mipLevels);
+    resources.textureImageView = createTextureImageView(resources.textureImage, resources.mipLevels);
+    resources.textureSampler = createTextureSampler(resources.mipLevels);
+
+    spriteCache[texturePath] = resources;
+    return spriteCache[texturePath];
+}
+
 } // namespace impgine

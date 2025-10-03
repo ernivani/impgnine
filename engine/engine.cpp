@@ -600,10 +600,11 @@ void Engine::loadScene(const std::string& scenePath) {
     size_t entityCount = 0;
     size_t totalEntities = 0;
 
-    // Count entities with MeshRenderer
+    // Count entities with MeshRenderer or SpriteRenderer
     for (const auto& entity : entities) {
         const auto& components = reg.getComponents(entity);
-        if (components.find(std::type_index(typeid(MeshRenderer))) != components.end()) {
+        if (components.find(std::type_index(typeid(MeshRenderer))) != components.end() ||
+            components.find(std::type_index(typeid(SpriteRenderer))) != components.end()) {
             totalEntities++;
         }
     }
@@ -631,6 +632,17 @@ void Engine::loadScene(const std::string& scenePath) {
             // Progress from 25% to 60%
             float progress = 0.25f + (0.35f * static_cast<float>(entityCount) / static_cast<float>(std::max(totalEntities, size_t(1))));
             updateLoadingProgress(progress);
+        } else if (components.find(std::type_index(typeid(SpriteRenderer))) != components.end()) {
+            auto& spriteRenderer = reg.getComponent<SpriteRenderer>(entity);
+            std::string texturePath = spriteRenderer.texture ? spriteRenderer.texture->texturePath : "";
+
+            // Load sprite resources using ResourceManager
+            resourceManager->loadSpriteResources(texturePath);
+            entityCount++;
+
+            // Progress from 25% to 60%
+            float progress = 0.25f + (0.35f * static_cast<float>(entityCount) / static_cast<float>(std::max(totalEntities, size_t(1))));
+            updateLoadingProgress(progress);
         }
     }
 
@@ -643,9 +655,14 @@ void Engine::loadScene(const std::string& scenePath) {
     updateLoadingProgress(0.70f);
 
     uint32_t meshCount = static_cast<uint32_t>(resourceManager->getMeshCache().size());
-    createDescriptorPool(device, meshCount, imageCount, descriptorPool);
+    uint32_t spriteCount = static_cast<uint32_t>(resourceManager->getSpriteCache().size());
+    uint32_t totalResourceCount = meshCount + spriteCount;
+    createDescriptorPool(device, totalResourceCount, imageCount, descriptorPool);
     createDescriptorSets(device, descriptorPool, descriptorSetLayout, uniformBuffers,
                         imageCount, &resourceManager->getMeshCache());
+    // Create descriptor sets for sprites
+    createDescriptorSetsForSprites(device, descriptorPool, descriptorSetLayout, uniformBuffers,
+                        imageCount, &resourceManager->getSpriteCache());
     updateLoadingProgress(0.75f);
 
     // Create graphics pipeline
@@ -726,8 +743,8 @@ void Engine::drawFrame() {
     impgine::recordCommandBuffer(commandBuffers[currentFrame], imageIndex, renderPass,
                                  swapChainFramebuffers, swapChain->getSwapChainExtent(),
                                  pipeline.get(), pipelineLayout,
-                                 &resourceManager->getMeshCache(), &registry,
-                                 uiRenderer.get(), window.get(), &uiWindows,
+                                 &resourceManager->getMeshCache(), &resourceManager->getSpriteCache(),
+                                 &registry, uiRenderer.get(), window.get(), &uiWindows,
                                  &outlineResources, selectedEntity);
 
     // Submit command buffer
