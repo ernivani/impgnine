@@ -1,7 +1,7 @@
 %IMP 1.0
 Camera:
-  position: {x: 8.8827, y: 6.44616, z: 2.79881}
-  rotation: {x: 0.454957, y: 0.4608, z: 0}
+  position: {x: 8.88269, y: 6.44616, z: 2.79881}
+  rotation: {x: 0.594098, y: -1.92734, z: 0}
 --- !imp!Entity
 name: VikingRoom
 active: true
@@ -10,9 +10,15 @@ Transform:
   rotation: {x: 0, y: 0, z: 0}
   scale: {x: 1, y: 1, z: 1}
 MeshRenderer:
-  modelPath: assets/models/viking_room.obj
-  texturePath: assets/textures/viking_room.png
-  color: {x: 1, y: 1, z: 1}
+  materials:
+    - name: VikingRoom_Material
+      texturePath: assets/textures/viking_room.png
+      color: {x: 1, y: 1, z: 1}
+      metallic: 0
+      roughness: 0.5
+      emissive: 0
+  mesh:
+    modelPath: assets/models/viking_room.obj
 --- !imp!Entity
 name: Airplane1
 active: true
@@ -21,9 +27,15 @@ Transform:
   rotation: {x: 0, y: 0, z: 0}
   scale: {x: 0.1, y: 0.1, z: 0.1}
 MeshRenderer:
-  modelPath: assets/models/piper_pa18.obj
-  texturePath: assets/textures/viking_room.png
-  color: {x: 1, y: 1, z: 1}
+  materials:
+    - name: Airplane_Material
+      texturePath: assets/textures/viking_room.png
+      color: {x: 1, y: 1, z: 1}
+      metallic: 0.2
+      roughness: 0.6
+      emissive: 0
+  mesh:
+    modelPath: assets/models/piper_pa18.obj
 --- !imp!Entity
 name: Airplane2
 active: true
@@ -32,9 +44,15 @@ Transform:
   rotation: {x: 1.5, y: 0, z: 0}
   scale: {x: 0.1, y: 0.1, z: 0.1}
 MeshRenderer:
-  modelPath: assets/models/piper_pa18.obj
-  texturePath: assets/textures/viking_room.png
-  color: {x: 1, y: 1, z: 1}
+  materials:
+    - name: Airplane_Material
+      texturePath: assets/textures/viking_room.png
+      color: {x: 1, y: 1, z: 1}
+      metallic: 0.2
+      roughness: 0.6
+      emissive: 0
+  mesh:
+    modelPath: assets/models/piper_pa18.obj
 --- !imp!Entity
 name: Airplane3
 active: true
@@ -43,9 +61,15 @@ Transform:
   rotation: {x: 1.5, y: 0, z: 0}
   scale: {x: 0.1, y: 0.1, z: 0.1}
 MeshRenderer:
-  modelPath: assets/models/viking_room.obj
-  texturePath: assets/textures/viking_room.png
-  color: {x: 1, y: 1, z: 1}
+  materials:
+    - name: VikingRoom_Material
+      texturePath: assets/textures/viking_room.png
+      color: {x: 1, y: 1, z: 1}
+      metallic: 0
+      roughness: 0.5
+      emissive: 0
+  mesh:
+    modelPath: assets/models/viking_room.obj
 --- !imp!Entity
 name: entity
 active: true
@@ -54,9 +78,15 @@ Transform:
   rotation: {x: 0, y: 0, z: 0}
   scale: {x: 1, y: 1, z: 1}
 MeshRenderer:
-  modelPath: assets/models/viking_room.obj
-  texturePath: assets/textures/viking_room.png
-  color: {x: 1, y: 1, z: 1}
+  materials:
+    - name: VikingRoom_Material
+      texturePath: assets/textures/viking_room.png
+      color: {x: 1, y: 1, z: 1}
+      metallic: 0
+      roughness: 0.5
+      emissive: 0
+  mesh:
+    modelPath: assets/models/viking_room.obj
 --- !imp!Entity
 name: entity_to_see
 active: true

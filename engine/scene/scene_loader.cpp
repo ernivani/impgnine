@@ -27,6 +27,15 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
         std::cerr << "Could not open scene file: " << scenePath << ". Using defaults.\n";
     }
 
+    struct PendingMaterial {
+        std::string name{"Default"};
+        std::string texturePath;
+        glm::vec3 color{1.0f, 1.0f, 1.0f};
+        float metallic{0.0f};
+        float roughness{0.5f};
+        float emissive{0.0f};
+    };
+
     struct PendingEntity {
         std::optional<std::string> tag;
         std::optional<std::string> parentName;
@@ -35,16 +44,19 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
         glm::vec3 rotation {0.0f};
         glm::vec3 scale {1.0f};
         std::string modelPath;
-        std::string texturePath;
-        glm::vec3 color {1.0f, 1.0f, 1.0f};
+        std::string texturePath;  // Legacy support
+        glm::vec3 color {1.0f, 1.0f, 1.0f};  // Legacy support
+        std::vector<PendingMaterial> materials;
         bool hasMeshRenderer = false;
         bool hasSpriteRenderer = false;
     };
 
     std::vector<PendingEntity> entitiesToCreate;
     PendingEntity current;
+    PendingMaterial currentMaterial;
     bool inEntityBlock = false;
-    enum class Section { None, Transform, MeshRenderer, SpriteRenderer };
+    bool inMaterialItem = false;
+    enum class Section { None, Transform, MeshRenderer, MeshRendererMaterials, MeshRendererMesh, SpriteRenderer };
     Section section = Section::None;
 
     auto trim = [](std::string s) {
@@ -64,6 +76,11 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
             if (line.rfind("---", 0) == 0) {
                 // Start of a new entity block if tagged as !imp!Entity
                 if (line.find("!imp!Entity") != std::string::npos) {
+                    // Flush last material if any
+                    if (inMaterialItem) {
+                        current.materials.push_back(currentMaterial);
+                        inMaterialItem = false;
+                    }
                     if (inEntityBlock) entitiesToCreate.push_back(current);
                     inEntityBlock = true;
                     current = PendingEntity{};
@@ -75,6 +92,26 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
             if (line == "Transform:") { section = Section::Transform; continue; }
             if (line == "MeshRenderer:") { section = Section::MeshRenderer; continue; }
             if (line == "SpriteRenderer:") { section = Section::SpriteRenderer; continue; }
+            if (line == "materials:") { section = Section::MeshRendererMaterials; continue; }
+            if (line == "mesh:") { section = Section::MeshRendererMesh; continue; }
+
+            // Handle material array items (- name: ...)
+            if (section == Section::MeshRendererMaterials && line.rfind("- ", 0) == 0) {
+                if (inMaterialItem) {
+                    current.materials.push_back(currentMaterial);
+                }
+                inMaterialItem = true;
+                currentMaterial = PendingMaterial{};
+                // Parse the line after "- "
+                std::string rest = line.substr(2);
+                auto sep = rest.find(':');
+                if (sep != std::string::npos) {
+                    std::string key = trim(rest.substr(0, sep));
+                    std::string value = trim(rest.substr(sep + 1));
+                    if (key == "name") currentMaterial.name = value;
+                }
+                continue;
+            }
 
             auto sep = line.find(':');
             if (sep == std::string::npos) continue;
@@ -122,8 +159,21 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
                 if (key == "position") current.position = parseObjVec3(value);
                 else if (key == "rotation") current.rotation = parseObjVec3(value);
                 else if (key == "scale") current.scale = parseObjVec3(value);
+            } else if (section == Section::MeshRendererMaterials) {
+                // Parse material properties
+                if (inMaterialItem) {
+                    if (key == "texturePath") currentMaterial.texturePath = value;
+                    else if (key == "color") currentMaterial.color = parseObjVec3(value);
+                    else if (key == "metallic") currentMaterial.metallic = std::stof(value);
+                    else if (key == "roughness") currentMaterial.roughness = std::stof(value);
+                    else if (key == "emissive") currentMaterial.emissive = std::stof(value);
+                }
+            } else if (section == Section::MeshRendererMesh) {
+                current.hasMeshRenderer = true;
+                if (key == "modelPath") current.modelPath = value;
             } else if (section == Section::MeshRenderer) {
                 current.hasMeshRenderer = true;
+                // Legacy format support
                 if (key == "modelPath") current.modelPath = value;
                 else if (key == "texturePath") current.texturePath = value;
                 else if (key == "color") current.color = parseObjVec3(value);
@@ -132,6 +182,11 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
                 if (key == "texture") current.texturePath = value;
                 else if (key == "color") current.color = parseObjVec3(value);
             }
+        }
+        // Flush last material if any
+        if (inMaterialItem) {
+            current.materials.push_back(currentMaterial);
+            inMaterialItem = false;
         }
         // Flush last block or default
         if (inEntityBlock) {
@@ -164,18 +219,37 @@ void SceneLoader::loadScene(const std::string& scenePath, const ProjectSettings&
 
         // Add appropriate renderer component based on what was found in the scene file
         if (pe.hasMeshRenderer) {
-            // Resolve paths relative to project
-            std::string fullModelPath = project.getFullPath(pe.modelPath);
-            std::string fullTexturePath = project.getFullPath(pe.texturePath);
+            impgine::MeshRenderer meshRenderer;
 
-            reg.addComponent<impgine::MeshRenderer>(e, impgine::MeshRenderer{
-                std::make_shared<impgine::Mesh>(fullModelPath),
-                std::make_shared<impgine::Texture2D>(fullTexturePath),
-                pe.color,
-                impgine::AABB{},  // Will be filled during resource loading
-                {},  // vertices - will be filled during resource loading
-                {}   // indices - will be filled during resource loading
-            });
+            // Create mesh
+            std::string fullModelPath = project.getFullPath(pe.modelPath);
+
+            // Handle materials
+            if (!pe.materials.empty()) {
+                // New format: use materials array
+                std::string meshTexture = pe.materials[0].texturePath.empty() ? "" : project.getFullPath(pe.materials[0].texturePath);
+                meshRenderer.mesh = std::make_shared<impgine::Mesh>(fullModelPath, meshTexture);
+
+                // Create Material objects
+                for (const auto& pm : pe.materials) {
+                    auto mat = std::make_shared<impgine::Material>(pm.name);
+                    if (!pm.texturePath.empty()) {
+                        mat->texturePath = project.getFullPath(pm.texturePath);
+                    }
+                    mat->color = pm.color;
+                    mat->metallic = pm.metallic;
+                    mat->roughness = pm.roughness;
+                    mat->emissive = pm.emissive;
+                    meshRenderer.materials.push_back(mat);
+                }
+            } else {
+                // Legacy format: use texturePath and color directly
+                std::string fullTexturePath = project.getFullPath(pe.texturePath);
+                meshRenderer.mesh = std::make_shared<impgine::Mesh>(fullModelPath, fullTexturePath);
+                meshRenderer.color = pe.color;
+            }
+
+            reg.addComponent<impgine::MeshRenderer>(e, meshRenderer);
         } else if (pe.hasSpriteRenderer) {
             // Resolve texture path relative to project
             std::string fullTexturePath = project.getFullPath(pe.texturePath);
@@ -303,12 +377,29 @@ bool SceneLoader::saveScene(const std::string& scenePath, const ProjectSettings&
         try {
             const auto& mr = registry.getComponent<MeshRenderer>(e);
             file << "MeshRenderer:\n";
-            // Persist paths relative to project root
-            std::string relModel = project.toRelativePath(mr.mesh->modelPath);
-            std::string relTex = mr.texture ? project.toRelativePath(mr.texture->texturePath) : "";
-            file << "  modelPath: " << relModel << "\n";
-            file << "  texturePath: " << relTex << "\n";
-            writeVec3("color", mr.color);
+
+            // Write materials array
+            if (!mr.materials.empty()) {
+                file << "  materials:\n";
+                for (const auto& mat : mr.materials) {
+                    file << "    - name: " << mat->name << "\n";
+                    if (!mat->texturePath.empty()) {
+                        std::string relTex = project.toRelativePath(mat->texturePath);
+                        file << "      texturePath: " << relTex << "\n";
+                    }
+                    file << "      color: {x: " << mat->color.x << ", y: " << mat->color.y << ", z: " << mat->color.z << "}\n";
+                    file << "      metallic: " << mat->metallic << "\n";
+                    file << "      roughness: " << mat->roughness << "\n";
+                    file << "      emissive: " << mat->emissive << "\n";
+                }
+            }
+
+            // Write mesh
+            if (mr.mesh) {
+                file << "  mesh:\n";
+                std::string relModel = project.toRelativePath(mr.mesh->modelPath);
+                file << "    modelPath: " << relModel << "\n";
+            }
         } catch (...) {
             // Try SpriteRenderer if MeshRenderer not found
             try {

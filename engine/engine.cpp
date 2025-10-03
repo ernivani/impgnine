@@ -498,63 +498,179 @@ void Engine::rebuildInspectorUI() {
     try {
         const auto& meshRenderer = registry.getComponent<MeshRenderer>(selected);
 
-        // Section title
+        // Section title with separator
         auto meshRendererTitle = std::make_shared<UILabel>();
-        meshRendererTitle->text = "Mesh Renderer";
+        meshRendererTitle->text = "=== Mesh Renderer ===";
         meshRendererTitle->position = glm::vec2(10.0f, y);
         meshRendererTitle->textColor = glm::vec4(0.9f, 0.9f, 0.9f, 1.0f);
         inspectorWindow.addComponent(meshRendererTitle);
-        y += 30.0f;
+        y += 35.0f;
 
-        // Mesh path
+        // --- MATERIALS SECTION ---
+        auto materialsHeader = std::make_shared<UILabel>();
+        materialsHeader->text = "Materials";
+        materialsHeader->position = glm::vec2(15.0f, y);
+        materialsHeader->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+        inspectorWindow.addComponent(materialsHeader);
+        y += 25.0f;
+
+        // Materials size
+        auto sizeLabel = std::make_shared<UILabel>();
+        sizeLabel->text = "  Size: " + std::to_string(meshRenderer.materials.size());
+        sizeLabel->position = glm::vec2(20.0f, y);
+        sizeLabel->textColor = glm::vec4(0.75f, 0.75f, 0.75f, 1.0f);
+        inspectorWindow.addComponent(sizeLabel);
+        y += 22.0f;
+
+        // Display each material
+        for (size_t i = 0; i < meshRenderer.materials.size(); ++i) {
+            const auto& mat = meshRenderer.materials[i];
+
+            auto matLabel = std::make_shared<UILabel>();
+            matLabel->text = "  Element " + std::to_string(i) + ": " + mat->name;
+            matLabel->position = glm::vec2(20.0f, y);
+            matLabel->textColor = glm::vec4(0.7f, 0.7f, 0.9f, 1.0f);
+            inspectorWindow.addComponent(matLabel);
+            y += 20.0f;
+
+            // Material properties (indented)
+            if (!mat->texturePath.empty()) {
+                auto texLabel = std::make_shared<UILabel>();
+                texLabel->text = "    Texture: " + project.toRelativePath(mat->texturePath);
+                texLabel->position = glm::vec2(25.0f, y);
+                texLabel->textColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+                inspectorWindow.addComponent(texLabel);
+                y += 18.0f;
+            }
+
+            auto pbrLabel = std::make_shared<UILabel>();
+            pbrLabel->text = "    Metallic: " + std::to_string(mat->metallic).substr(0, 4) +
+                            " | Roughness: " + std::to_string(mat->roughness).substr(0, 4);
+            pbrLabel->position = glm::vec2(25.0f, y);
+            pbrLabel->textColor = glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
+            inspectorWindow.addComponent(pbrLabel);
+            y += 20.0f;
+        }
+        y += 5.0f;
+
+        // --- MESH SECTION ---
+        auto meshHeader = std::make_shared<UILabel>();
+        meshHeader->text = "Mesh";
+        meshHeader->position = glm::vec2(15.0f, y);
+        meshHeader->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+        inspectorWindow.addComponent(meshHeader);
+        y += 25.0f;
+
         if (meshRenderer.mesh) {
-            auto meshLabel = std::make_shared<UILabel>();
-            meshLabel->text = "Mesh";
-            meshLabel->position = glm::vec2(20.0f, y + 5.0f);
-            meshLabel->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
-            inspectorWindow.addComponent(meshLabel);
-
             auto meshPath = std::make_shared<UILabel>();
-            meshPath->text = project.toRelativePath(meshRenderer.mesh->modelPath);
-            meshPath->position = glm::vec2(100.0f, y + 5.0f);
+            meshPath->text = "  Model: " + project.toRelativePath(meshRenderer.mesh->modelPath);
+            meshPath->position = glm::vec2(20.0f, y);
             meshPath->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
             inspectorWindow.addComponent(meshPath);
-            y += 28.0f;
+            y += 22.0f;
         }
+        y += 5.0f;
 
-        // Texture path
-        if (meshRenderer.texture) {
-            auto texLabel = std::make_shared<UILabel>();
-            texLabel->text = "Texture";
-            texLabel->position = glm::vec2(20.0f, y + 5.0f);
-            texLabel->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
-            inspectorWindow.addComponent(texLabel);
+        // --- LIGHTING SECTION ---
+        auto lightingHeader = std::make_shared<UILabel>();
+        lightingHeader->text = "Lighting";
+        lightingHeader->position = glm::vec2(15.0f, y);
+        lightingHeader->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+        inspectorWindow.addComponent(lightingHeader);
+        y += 25.0f;
 
-            auto texPath = std::make_shared<UILabel>();
-            texPath->text = project.toRelativePath(meshRenderer.texture->texturePath);
-            texPath->position = glm::vec2(100.0f, y + 5.0f);
-            texPath->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
-            inspectorWindow.addComponent(texPath);
-            y += 28.0f;
-        }
+        auto castShadowsLabel = std::make_shared<UILabel>();
+        castShadowsLabel->text = "  Cast Shadows: " + std::string(meshRenderer.castShadows ? "On" : "Off");
+        castShadowsLabel->position = glm::vec2(20.0f, y);
+        castShadowsLabel->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+        inspectorWindow.addComponent(castShadowsLabel);
+        y += 20.0f;
 
-        // Color tint (read-only for now)
-        auto colorLabel = std::make_shared<UILabel>();
-        colorLabel->text = "Color";
-        colorLabel->position = glm::vec2(20.0f, y + 5.0f);
-        colorLabel->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
-        inspectorWindow.addComponent(colorLabel);
+        auto receiveShadowsLabel = std::make_shared<UILabel>();
+        receiveShadowsLabel->text = "  Receive Shadows: " + std::string(meshRenderer.receiveShadows ? "On" : "Off");
+        receiveShadowsLabel->position = glm::vec2(20.0f, y);
+        receiveShadowsLabel->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+        inspectorWindow.addComponent(receiveShadowsLabel);
+        y += 20.0f;
 
-        std::string colorStr = "(" +
-            std::to_string(meshRenderer.color.r).substr(0, 4) + ", " +
-            std::to_string(meshRenderer.color.g).substr(0, 4) + ", " +
-            std::to_string(meshRenderer.color.b).substr(0, 4) + ")";
-        auto colorValue = std::make_shared<UILabel>();
-        colorValue->text = colorStr;
-        colorValue->position = glm::vec2(100.0f, y + 5.0f);
-        colorValue->textColor = glm::vec4(meshRenderer.color.r, meshRenderer.color.g, meshRenderer.color.b, 1.0f);
-        inspectorWindow.addComponent(colorValue);
-        y += 35.0f;
+        auto contributeGILabel = std::make_shared<UILabel>();
+        contributeGILabel->text = "  Contribute GI: " + std::string(meshRenderer.contributeGI ? "On" : "Off");
+        contributeGILabel->position = glm::vec2(20.0f, y);
+        contributeGILabel->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+        inspectorWindow.addComponent(contributeGILabel);
+        y += 25.0f;
+
+        // --- PROBES SECTION ---
+        auto probesHeader = std::make_shared<UILabel>();
+        probesHeader->text = "Probes";
+        probesHeader->position = glm::vec2(15.0f, y);
+        probesHeader->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+        inspectorWindow.addComponent(probesHeader);
+        y += 25.0f;
+
+        auto getLightProbeMode = [](MeshRenderer::LightProbeMode mode) -> std::string {
+            switch (mode) {
+                case MeshRenderer::LightProbeMode::Off: return "Off";
+                case MeshRenderer::LightProbeMode::BlendProbes: return "Blend Probes";
+                case MeshRenderer::LightProbeMode::UseProxyVolume: return "Use Proxy Volume";
+                default: return "Unknown";
+            }
+        };
+
+        auto getReflectionProbeMode = [](MeshRenderer::ReflectionProbeMode mode) -> std::string {
+            switch (mode) {
+                case MeshRenderer::ReflectionProbeMode::Off: return "Off";
+                case MeshRenderer::ReflectionProbeMode::BlendProbes: return "Blend Probes";
+                case MeshRenderer::ReflectionProbeMode::Simple: return "Simple";
+                default: return "Unknown";
+            }
+        };
+
+        auto lightProbesLabel = std::make_shared<UILabel>();
+        lightProbesLabel->text = "  Light Probes: " + getLightProbeMode(meshRenderer.lightProbes);
+        lightProbesLabel->position = glm::vec2(20.0f, y);
+        lightProbesLabel->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+        inspectorWindow.addComponent(lightProbesLabel);
+        y += 20.0f;
+
+        auto reflectionProbesLabel = std::make_shared<UILabel>();
+        reflectionProbesLabel->text = "  Reflection Probes: " + getReflectionProbeMode(meshRenderer.reflectionProbes);
+        reflectionProbesLabel->position = glm::vec2(20.0f, y);
+        reflectionProbesLabel->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+        inspectorWindow.addComponent(reflectionProbesLabel);
+        y += 25.0f;
+
+        // --- ADDITIONAL SETTINGS ---
+        auto additionalHeader = std::make_shared<UILabel>();
+        additionalHeader->text = "Additional Settings";
+        additionalHeader->position = glm::vec2(15.0f, y);
+        additionalHeader->textColor = glm::vec4(0.85f, 0.85f, 0.85f, 1.0f);
+        inspectorWindow.addComponent(additionalHeader);
+        y += 25.0f;
+
+        auto getMotionVectorMode = [](MeshRenderer::MotionVectorMode mode) -> std::string {
+            switch (mode) {
+                case MeshRenderer::MotionVectorMode::Camera: return "Camera Motion";
+                case MeshRenderer::MotionVectorMode::Object: return "Per Object Motion";
+                case MeshRenderer::MotionVectorMode::ForceNoMotion: return "Force No Motion";
+                default: return "Unknown";
+            }
+        };
+
+        auto motionVectorsLabel = std::make_shared<UILabel>();
+        motionVectorsLabel->text = "  Motion Vectors: " + getMotionVectorMode(meshRenderer.motionVectors);
+        motionVectorsLabel->position = glm::vec2(20.0f, y);
+        motionVectorsLabel->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+        inspectorWindow.addComponent(motionVectorsLabel);
+        y += 20.0f;
+
+        auto dynamicOcclusionLabel = std::make_shared<UILabel>();
+        dynamicOcclusionLabel->text = "  Dynamic Occlusion: " + std::string(meshRenderer.dynamicOcclusion ? "On" : "Off");
+        dynamicOcclusionLabel->position = glm::vec2(20.0f, y);
+        dynamicOcclusionLabel->textColor = glm::vec4(0.7f, 0.7f, 0.7f, 1.0f);
+        inspectorWindow.addComponent(dynamicOcclusionLabel);
+        y += 30.0f;
+
     } catch (...) {
         // No MeshRenderer component
     }
@@ -615,7 +731,7 @@ void Engine::loadScene(const std::string& scenePath) {
         if (components.find(std::type_index(typeid(MeshRenderer))) != components.end()) {
             auto& meshRenderer = reg.getComponent<MeshRenderer>(entity);
             std::string modelPath = meshRenderer.mesh->modelPath;
-            std::string texturePath = meshRenderer.texture ? meshRenderer.texture->texturePath : "";
+            std::string texturePath = meshRenderer.mesh->texturePath;
 
             // Load mesh resources using ResourceManager
             auto& gpuResources = resourceManager->loadMeshResources(modelPath, texturePath);
@@ -1337,14 +1453,11 @@ void Engine::rebuildHierarchyUI() {
         reg.addComponent<Active>(newEntity, Active{true, true});
 
         // Create empty mesh renderer (user can set paths in inspector)
-        reg.addComponent<MeshRenderer>(newEntity, MeshRenderer{
-            std::make_shared<Mesh>(defaultModel),
-            std::make_shared<Texture2D>(defaultTexture),
-            glm::vec3(1.0f),
-            AABB{},  // Will be filled during resource loading
-            {},  // vertices - will be filled during resource loading
-            {}   // indices - will be filled during resource loading
-        });
+        MeshRenderer newMeshRenderer;
+        newMeshRenderer.mesh = std::make_shared<Mesh>(defaultModel, defaultTexture);
+        newMeshRenderer.color = glm::vec3(1.0f);
+        // Other fields use default values
+        reg.addComponent<MeshRenderer>(newEntity, newMeshRenderer);
 
         selectedEntity = newEntity;
         markSceneModified();

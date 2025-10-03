@@ -36,6 +36,8 @@ namespace impgine {
     };
 
     // Forward declarations for component pointer types
+    struct Material;
+
     class Texture2D{
         public:
         std::string texturePath;
@@ -95,9 +97,28 @@ namespace impgine {
 
 
     struct MeshRenderer {
+        // Mesh and Materials
         std::shared_ptr<Mesh> mesh;
-        std::shared_ptr<Texture2D> texture;
-        glm::vec3 color{ 1.0f, 1.0f, 1.0f };
+        std::vector<std::shared_ptr<Material>> materials;
+        glm::vec3 color{ 1.0f, 1.0f, 1.0f };  // Legacy color override
+
+        // Lighting
+        bool castShadows{true};
+        bool receiveShadows{true};
+        bool contributeGI{false};
+
+        // Probes
+        enum class LightProbeMode { Off, BlendProbes, UseProxyVolume };
+        enum class ReflectionProbeMode { Off, BlendProbes, Simple };
+        LightProbeMode lightProbes{LightProbeMode::BlendProbes};
+        ReflectionProbeMode reflectionProbes{ReflectionProbeMode::BlendProbes};
+
+        // Additional Settings
+        enum class MotionVectorMode { Camera, Object, ForceNoMotion };
+        MotionVectorMode motionVectors{MotionVectorMode::Object};
+        bool dynamicOcclusion{true};
+
+        // Internal fields for picking and bounds
         AABB boundingBox;  // Local-space bounding box (updated when mesh is loaded)
         std::vector<glm::vec3> vertices;  // Local-space vertices for precise picking
         std::vector<uint32_t> indices;     // Triangle indices for precise picking
@@ -108,6 +129,24 @@ namespace impgine {
         glm::mat4 model;
         glm::vec4 color;
     };
+
+    struct Material {
+        std::string name{"Default"};
+        std::string shaderPath;
+        std::string texturePath;
+        glm::vec3 color{1.0f, 1.0f, 1.0f};
+
+        // PBR properties
+        float metallic{0.0f};
+        float roughness{0.5f};
+        float emissive{0.0f};
+
+        Material() = default;
+        explicit Material(const std::string& matName) : name(matName) {}
+        Material(const std::string& matName, const std::string& texPath)
+            : name(matName), texturePath(texPath) {}
+    };
+         
 
 
 
